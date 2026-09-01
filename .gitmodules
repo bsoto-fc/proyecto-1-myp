@@ -1,0 +1,3 @@
+[submodule "gui"]
+	path = gui
+	url = git@github.com:bsoto-fc/proyecto-1-myp-gui.git
