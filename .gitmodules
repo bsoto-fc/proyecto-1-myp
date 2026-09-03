@@ -1,6 +1,0 @@
-[submodule "gui"]
-	path = gui
-	url = git@github.com:bsoto-fc/proyecto-1-myp-gui.git
-[submodule "server"]
-	path = server
-	url = git@github.com:bsoto-fc/proyecto-1-myp-servidor.git
