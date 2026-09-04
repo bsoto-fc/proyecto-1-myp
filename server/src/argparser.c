@@ -19,20 +19,19 @@ uint16_t ParsePort(int argc, char* argv[]){
       PORT = ReadPortFromString(optarg);
       if(PORT == 0){
         fprintf(stderr, "ERROR: Puerto debe ser un entero de 1-%d\n", MAX_PORT_NUMBER);
+        exit(EXIT_FAILURE);
       }
       break;
     case '?':
       if (optopt == 'p'){
         fprintf (stderr, "Opcion -%c require un argumento.\n", optopt);
-        PORT = 0;
-      }
-      else if (isprint (optopt)){
+        exit(EXIT_FAILURE);
+      } else if (isprint (optopt)){
         fprintf (stderr, "Opcion desconocida '-%c'.\n", optopt);
-        PORT = 0;
-      }
-      else {
+        exit(EXIT_FAILURE);
+      } else {
         fprintf (stderr, "Caracter de opcion desconocido `\\x%x'.\n", optopt);
-        PORT = 0;
+        exit(EXIT_FAILURE);
       }
     }
   }
@@ -44,13 +43,11 @@ uint16_t ReadPortFromString(char* str){
   // Ejemplo #4 de https://www.geeksforgeeks.org/c/convert-string-to-int-in-c/
   for (int i = 0; str[i] != '\0'; i++) {
     if (str[i] >= 48 && str[i] <= 57) {
-      printf("%d\n",num);
       if(num * 10 + (str[i] - 48) > 65535){                    
         return 0;
       }
       num = num * 10 + (str[i] - 48);
-    }
-    else {
+    } else {
       return 0;
     }
   }
