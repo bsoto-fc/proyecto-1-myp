@@ -7,7 +7,21 @@
 
 #define MAX_PORT_NUMBER UINT16_MAX
 
-uint16_t ReadPortFromString(char* str);
+uint16_t ReadPortFromString(char* str){
+  uint16_t num = 0;
+  // Ejemplo #4 de https://www.geeksforgeeks.org/c/convert-string-to-int-in-c/
+  for (int i = 0; str[i] != '\0'; i++) {
+    if (str[i] >= 48 && str[i] <= 57) {
+      if(num * 10 + (str[i] - 48) > 65535){                    
+        return 0;
+      }
+      num = num * 10 + (str[i] - 48);
+    } else {
+      return 0;
+    }
+  }
+  return num;
+}
 
 uint16_t ParsePort(int argc, char* argv[]){
   uint16_t PORT = 1959;
@@ -38,18 +52,3 @@ uint16_t ParsePort(int argc, char* argv[]){
   return PORT;
 }
 
-uint16_t ReadPortFromString(char* str){
-  uint16_t num = 0;
-  // Ejemplo #4 de https://www.geeksforgeeks.org/c/convert-string-to-int-in-c/
-  for (int i = 0; str[i] != '\0'; i++) {
-    if (str[i] >= 48 && str[i] <= 57) {
-      if(num * 10 + (str[i] - 48) > 65535){                    
-        return 0;
-      }
-      num = num * 10 + (str[i] - 48);
-    } else {
-      return 0;
-    }
-  }
-  return num;
-}
