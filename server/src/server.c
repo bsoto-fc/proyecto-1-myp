@@ -28,12 +28,17 @@ void StartServer(uint16_t port, char* ip) {
   int listenResult = listen(serverSocketFD, 10);
 
   if(listenResult == 0)
-    printf("Listening en port %d",port);
+    printf("Listening en port %d\n",port);
   else
     error("Error en operacion listen.\n");
 
   struct sockaddr_in clientAddr;
   uint32_t clientAddrSize = sizeof(struct sockaddr_in);
   int clientSocketFD = accept(serverSocketFD, (struct sockaddr*) &clientAddr, &clientAddrSize);
+
+  char buffer[1024];
+  recv(clientSocketFD, buffer, sizeof(buffer), 0);
+
+  printf("Respuesta fue %s\n",buffer);
 }
 

@@ -3,20 +3,49 @@
  */
 package mx.unam.ciencias.myp
 
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 
 fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "Compose Demo"
-        ) {
-          Greeting()
-        }
+    Window(onCloseRequest = ::exitApplication, title = "Compose Demo") {
+        screenManager()
+    }
 }
+
+enum class Screens {
+    Connection,Chat,Waiting
+}
+
 @Composable
-fun Greeting() {
-    Text("Hello, Compose!")
-}
+fun screenManager() {
+    var currentScreen by remember { mutableStateOf(Screens.Connection) }
+
+    var connectedIp by remember { mutableStateOf("") }
+    var connectedPort by remember { mutableStateOf("") }
+
+    when(currentScreen) {
+        Screens.Connection -> {
+            ConnectionWindow(
+                onConnect = { ip, port ->
+                    connectedIp = ip
+                    connectedPort = port
+                    currentScreen = Screens.Waiting
+                }
+            )
+        }
+        Screens.Chat -> {
+            Chat(connectedIp,connectedPort)
+        }
+        Screens.Waiting -> {
+            WaitingWindow(connectedIp,connectedPort)
+        }
+    }
+    
+}  
+
