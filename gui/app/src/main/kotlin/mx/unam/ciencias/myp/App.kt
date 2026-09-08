@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import mx.unam.ciencias.myp.Screens
 
 fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "Compose Demo") {
@@ -27,7 +28,7 @@ fun screenManager() {
     var currentScreen by remember { mutableStateOf(Screens.Connection) }
 
     var connectedIp by remember { mutableStateOf("") }
-    var connectedPort by remember { mutableStateOf("") }
+    var connectedPort by remember { mutableStateOf(0) }
 
     when(currentScreen) {
         Screens.Connection -> {
@@ -43,7 +44,13 @@ fun screenManager() {
             Chat(connectedIp,connectedPort)
         }
         Screens.Waiting -> {
-            WaitingWindow(connectedIp,connectedPort)
+            WaitingWindow(
+                ip = connectedIp,
+                port = connectedPort,
+                connectFailure = {
+                    currentScreen = Screens.Connection
+                }
+            )
         }
     }
     

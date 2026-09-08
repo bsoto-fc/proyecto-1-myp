@@ -11,7 +11,7 @@ import androidx.compose.ui.window.application
 
 
 @Composable
-fun Chat(ip: String, port: String) {
+fun Chat(ip: String, port: Int) {
     MaterialTheme {
         Scaffold(
             topBar = {

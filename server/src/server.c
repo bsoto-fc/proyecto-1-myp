@@ -12,24 +12,19 @@ void StartServer(uint16_t port, char* ip) {
   // IPv4, TCP, IP
 
   int serverSocketFD = CreateTCPIPv4Socket();
-  if(serverSocketFD < 0) {
+  if(serverSocketFD < 0) 
     error("Error creando socket.\n");
-  }
 
   struct sockaddr_in* serverAddr = CreateIPv4Address(ip, port);
 
   int bindResult = bind(serverSocketFD, (struct sockaddr*) serverAddr, sizeof(*serverAddr));
 
-  if(bindResult == 0)
-    printf("Operacion bind fue exitosa!\n");
-  else 
+  if(bindResult < 0)
     error("Error en operacion bind.\n"); 
 
   int listenResult = listen(serverSocketFD, 10);
 
-  if(listenResult == 0)
-    printf("Listening en port %d\n",port);
-  else
+  if(listenResult < 0)
     error("Error en operacion listen.\n");
 
   struct sockaddr_in clientAddr;
@@ -40,5 +35,7 @@ void StartServer(uint16_t port, char* ip) {
   recv(clientSocketFD, buffer, sizeof(buffer), 0);
 
   printf("Respuesta fue %s\n",buffer);
+
+  free(serverAddr);
 }
 

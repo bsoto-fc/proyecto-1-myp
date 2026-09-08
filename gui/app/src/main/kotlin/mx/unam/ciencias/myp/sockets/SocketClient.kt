@@ -7,8 +7,11 @@ import java.io.IOException
 
 
 // Obtenido de https://kotlin.unisbadri.com/en/advanced/socket/#tcp-socket--client
-fun socket(ip: String, port: Int){
-    try {
+object SocketClient {
+
+    var lastReceivedMessage = ""
+    
+    fun start(ip:String, port:Int){
         Socket(ip, port).use { socket ->
             // Set a timeout — don't let the socket wait forever
             socket.soTimeout = 5000  // 5 second read timeout
@@ -24,13 +27,8 @@ fun socket(ip: String, port: Int){
             
             // Read the response
             val response = reader.readLine()
+            lastReceivedMessage = response ?: "" 
             println("Server response: $response")
         }
-    } catch (e: ConnectException) {
-        println("Failed to connect to $ip:$port — is the server running?")
-    } catch (e: SocketTimeoutException) {
-        println("Timeout: the server didn't respond within 5 seconds")
-    } catch (e: IOException) {
-        println("Network error: ${e.message}")
     }
 }

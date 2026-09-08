@@ -9,14 +9,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.io.IOException
+
 import mx.unam.ciencias.myp.sockets.*
 
 @Composable
-fun WaitingWindow(ip: String, port: String) {
+fun WaitingWindow(ip: String, port: Int, connectFailure: () -> Unit) {
+
+    var serverMessage by remember { mutableStateOf("") }
+    var exceptionMessage by remember { mutableStateOf("") }
+
+    var startedConnection by remember { mutableStateOf(false) }
+
+    if(!startedConnection){
+        try {
+            SocketClient.start(ip,port)
+            serverMessage = SocketClient.lastReceivedMessage
+        } catch (e: ConnectException) {
+            exceptionMessage = "No se pudo conectar a $ip:$port. ¿El servidor está activo?"
+        } catch (e: SocketTimeoutException) {
+            exceptionMessage = "Timeout: El servidor no respondió en 5 segundos"
+        } catch (e: IOException) {
+            exceptionMessage = "Error de conexión: ${e.message}"
+        }
+    }
+    
     MaterialTheme {
         Scaffold(
             topBar = {
-                TopAppBar(title = { Text("Esperando conexión al servidor.") })
+                TopAppBar(title = { Text("Esperando conexión al servidor...") })
             }
         ) { paddingValues ->
             Column(
@@ -30,33 +53,24 @@ fun WaitingWindow(ip: String, port: String) {
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextField(
-                        value = ip,
-                        onValueChange = {
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Ingresa IP del servidor.") },
-                        singleLine = true,
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    TextField(
-                        value = port,
-                        onValueChange = {
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Ingresa puerto del servidor.") },
-                        singleLine = true,
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Button(onClick = {
-                               socket(ip,port.toInt())
-                           }) {
-                        Text("Conectar")
+                    if(exceptionMessage.isNotEmpty()) {
+                        Text(
+                            text = exceptionMessage,
+                            color = MaterialTheme.colors.error
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(onClick = {
+                                   connectFailure()
+                               }) {
+                            Text("Regresar")
+                        }
                     }
+                    else
+                        Text(
+                            text = serverMessage,
+                        )
                 }
             }
         }

@@ -9,8 +9,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 
+import mx.unam.ciencias.myp.utils.*
+
 @Composable
-fun ConnectionWindow(onConnect: (String,String) -> Unit){
+fun ConnectionWindow(onConnect: (String,Int) -> Unit){
 
     var ip by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("") }
@@ -64,8 +66,18 @@ fun ConnectionWindow(onConnect: (String,String) -> Unit){
                     
                     Button(onClick = {
                                if(ip.isNotBlank() && port.isNotBlank()) {
-                                   errorMessage = ""
-                                   onConnect(ip,port)
+                                   try{
+                                       if(!validateIPv4(ip)) 
+                                           errorMessage = "Ingresa una IP válida."
+                                       else if(!validatePort(port.toInt()))
+                                           errorMessage = "Ingresa un puerto dentro del rango 1-65535"
+                                       else {
+                                           errorMessage = ""
+                                           onConnect(ip,port.toInt())
+                                       }
+                                   } catch(e: NumberFormatException){
+                                       errorMessage = "Ingresa un puerto dentro del rango 1-65535"
+                                   }
                                } else
                                      errorMessage = "Ingresa ambos campos."
                            }) {
