@@ -4,10 +4,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #include "server.h"
 #include "../util/socketutil.h"
 
+/* Función para iniciar el servidor */
 void StartServer(uint16_t port, char* ip) {
   // IPv4, TCP, IP
 
@@ -27,15 +29,9 @@ void StartServer(uint16_t port, char* ip) {
   if(listenResult < 0)
     error("Error en operacion listen.\n");
 
-  struct sockaddr_in clientAddr;
-  uint32_t clientAddrSize = sizeof(struct sockaddr_in);
-  int clientSocketFD = accept(serverSocketFD, (struct sockaddr*) &clientAddr, &clientAddrSize);
+  startAcceptingIncomingConnections(serverSocketFD);
 
-  char buffer[1024];
-  recv(clientSocketFD, buffer, sizeof(buffer), 0);
-
-  printf("Respuesta fue %s\n",buffer);
-
+  shutdown(serverSocketFD, SHUT_RDWR);
   free(serverAddr);
 }
 
