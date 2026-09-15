@@ -61,18 +61,20 @@ void* receiveAndPrintIncomingData(void* data) {
   char buffer[1024];
 
   struct thread_info* info = data;
+
+  _Bool receiving = true;
   
-  while(true) {
+  while(receiving) {
       ssize_t amountReceived = recv(info->socketFD, buffer, sizeof(buffer), 0);
       if(amountReceived > 0) {
           // To do: Implementar un mejor manejo ante buffer overflows.
           if(amountReceived > 1024)
               error("Buffer overflow.");
-          buffer[amountReceived] = 0;
-          printf("Cliente mando: \"%s\"",buffer);
+          buffer[amountReceived] = '\0';
+          printf("Cliente mando: \"%s \"",buffer);
       }
       if(amountReceived == 0)
-          break;
+        receiving = false;
   }
 
   close(info->socketFD);

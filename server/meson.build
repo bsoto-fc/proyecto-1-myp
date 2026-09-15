@@ -2,7 +2,11 @@ project('proyecto-1-myp-server', 'c',
   version : '0.1',
   default_options : ['warning_level=3'])
 
-cjson = dependency('libcjson')
+cjson = dependency(
+        'libcjson',
+        fallback : ['libcjson','libcjson_dep'])
+
+subdir('lib')
 
 exe = executable(
 	'server', 
@@ -10,7 +14,7 @@ exe = executable(
 	'src/argparser.c',
 	'src/server.c',
 	'util/socketutil.c',
-	dependencies: [cjson],
+	dependencies: [cjson,set_dep],
   install : true)
 
 test('basic', exe)

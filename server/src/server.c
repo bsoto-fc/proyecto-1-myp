@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -8,6 +9,28 @@
 
 #include "server.h"
 #include "../util/socketutil.h"
+
+_Bool serverRunning = false;
+
+void* ReceiveKeyboardCommands() {
+  _Bool receivingInput = true;
+  
+  char buff[100];
+  
+  while(receivingInput) {
+    fgets(buff, sizeof(buff), stdin);
+    printf("Comando: %s",buff);
+    if(strcmp(buff, "exit") == 0)
+      serverRunning = false;
+  }
+  
+  return NULL;
+} 
+
+void CreateStdinThreadForInput(){
+  pthread_t id;
+  pthread_create(&id, NULL, ReceiveKeyboardCommands, NULL);
+}
 
 /* Función para iniciar el servidor */
 void StartServer(uint16_t port, char* ip) {
@@ -28,6 +51,10 @@ void StartServer(uint16_t port, char* ip) {
 
   if(listenResult < 0)
     error("Error en operacion listen.\n");
+
+  serverRunning = true;
+
+  CreateStdinThreadForInput();
 
   startAcceptingIncomingConnections(serverSocketFD);
 

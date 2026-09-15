@@ -1,0 +1,3 @@
+[submodule "server/lib/set"]
+	path = server/lib/set
+	url = git@github.com:barrust/set.git
