@@ -26,10 +26,6 @@ void error(char* msg);
 
 AcceptedSocket* acceptIncomingConnection(int serverSocketFD);
 
-void* receiveAndPrintIncomingData(void* socketFD);
-
-void startAcceptingIncomingConnections(int serverSocketFD);
-
-void receiveAndPrintIncomingDataOnSeparateThread(AcceptedSocket* pSocket); 
+void sendMessage(char* buffer, int socketFD);
 
 #endif // SOCKETUTIL_H_

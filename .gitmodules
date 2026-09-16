@@ -1,3 +1,6 @@
 [submodule "server/lib/set"]
 	path = server/lib/set
 	url = git@github.com:barrust/set.git
+[submodule "server/lib/hashmap"]
+	path = server/lib/hashmap
+	url = git@github.com:tidwall/hashmap.c.git

@@ -1,5 +1,7 @@
 #include "socketutil.h"
 #include <pthread.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 void error(char* msg){
@@ -8,6 +10,7 @@ void error(char* msg){
 }
 
 int CreateTCPIPv4Socket(){
+  // IPv4, TCP, IP
   return socket(AF_INET, SOCK_STREAM, 0); // Regresa negativo si algo sale mal.
 }
 
@@ -39,45 +42,6 @@ struct sockaddr_in* CreateIPv4Address(char* ip, uint16_t port){
   return addr;
 }
 
-void startAcceptingIncomingConnections(int serverSocketFD) {
-  while(true) {
-    AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
-    receiveAndPrintIncomingDataOnSeparateThread(clientSocket);
-  }
-}
-
-struct thread_info{
-  int socketFD;
-};
-
-void receiveAndPrintIncomingDataOnSeparateThread(AcceptedSocket* pSocket) {
-  pthread_t id;
-  struct thread_info* info = malloc(sizeof(struct thread_info));
-  info->socketFD = pSocket->acceptedSocketFD;
-  pthread_create(&id, NULL, receiveAndPrintIncomingData, info);
-}
-
-void* receiveAndPrintIncomingData(void* data) {
-  char buffer[1024];
-
-  struct thread_info* info = data;
-
-  _Bool receiving = true;
-  
-  while(receiving) {
-      ssize_t amountReceived = recv(info->socketFD, buffer, sizeof(buffer), 0);
-      if(amountReceived > 0) {
-          // To do: Implementar un mejor manejo ante buffer overflows.
-          if(amountReceived > 1024)
-              error("Buffer overflow.");
-          buffer[amountReceived] = '\0';
-          printf("Cliente mando: \"%s \"",buffer);
-      }
-      if(amountReceived == 0)
-        receiving = false;
-  }
-
-  close(info->socketFD);
-  free(info);
-  return NULL;
+void sendMessage(char* buffer, int socketFD){
+  send(socketFD, buffer, strlen(buffer), 0);
 }
