@@ -10,10 +10,16 @@ Servidor:
 - gcc
 - pkg-config
 
+
 Cliente:
 - Kotlin
 - Gradle
+- OpenJDK 21
 
+Usando Void Linux:
+```
+# xbps-install -S meson pkg-config cJSON-devel openjdk21 gradle kotlin-bin
+```
 ### Instalación
 
 Clona el repositorio:
@@ -35,5 +41,6 @@ meson compile -C builddir/
 Para el cliente:
 ```
 cd gui/
-./gradlew run
+./gradlew run # Utilizando el wrapper de gradle.
+gradle run # Utilizando la instalación del sistema de gradle.
 ```
