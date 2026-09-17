@@ -3,11 +3,12 @@
 
 #include <pthread.h>
 #include <stddef.h>
-#include "hashmap.h"
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include "hashmap.h"
+#include "jsonutil.h"
 
 #define AWAY 1
 #define ACTIVE 2
@@ -36,8 +37,12 @@ void DestroyUserList(UserList* userList);
 
 bool AddUser(UserList* userList, const char* username, int status, int clientFD); 
 
-bool DeleteUser(UserList* userList, char* username);
+bool DeleteUser(UserList* userList, const char* username); 
 
 bool GetUser(UserList* userList, const char* username,UserEntry* result);
+
+char* GenerateUserListJSON(UserList* list); 
+
+bool determineJSONResponse(char* buffer, UserList* list, int clientFD); 
 
 #endif // USERS_H_

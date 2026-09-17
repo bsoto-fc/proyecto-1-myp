@@ -9,6 +9,10 @@ Servidor:
 - cJSON
 - gcc
 - pkg-config
+- Criterion (Pruebas unitarias)
+- libbfii
+- libgit2
+- nanomsg
 
 
 Cliente:
@@ -18,7 +22,7 @@ Cliente:
 
 Usando Void Linux:
 ```
-# xbps-install -S meson pkg-config cJSON-devel openjdk21 gradle kotlin-bin
+# xbps-install -S meson pkg-config cJSON-devel openjdk21 gradle kotlin-bin Criterion-devel libffi-devel libgit2-devel nanomsg-devel
 ```
 ### Instalación
 
