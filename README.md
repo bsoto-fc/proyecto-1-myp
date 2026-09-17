@@ -39,7 +39,7 @@ Para el servidor:
 cd server/
 meson setup builddir/
 meson compile -C builddir/
-./builddir/server
+./builddir/src/xerces_server
 ```
 
 Para el cliente:
