@@ -1,5 +1,6 @@
 #include "users.h"
 #include "../util/socketutil.h"
+#include "socketutil.h"
 #include <cjson/cJSON.h>
 #include <pthread.h>
 #include <string.h>
@@ -52,7 +53,7 @@ bool AddUser(UserList* userList, const char* username, int status, int clientFD)
   UserEntry entry = { .user = {.status = status, .clientFD = clientFD} };
   strcpy(entry.username, username);
   pthread_mutex_lock(&userList->mutexLock);
-  UserEntry* existingUser = hashmap_get(userList->userList,&entry);
+  const UserEntry* existingUser = hashmap_get(userList->userList,&entry);
   if(existingUser != NULL) {
     printf("[SERVER]: Error al autenticar usuario: Usuario existente.\n");
     pthread_mutex_unlock(&userList->mutexLock);
@@ -155,11 +156,26 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD) {
   if(!parseJSONValue(json,"type",value,sizeof(value)))
     return false;
   else if(strcmp(value, "IDENTIFY") == 0) {
-    return AuthenticateUser(list, clientFD, json);
+    if(AuthenticateUser(list, clientFD, json)) {
+      cJSON* responseJSON = cJSON_CreateObject();
+      if(responseJSON == NULL){
+        cJSON_Delete(responseJSON);
+        return false;
+      }
+      cJSON_AddStringToObject(responseJSON, "type", "RESPONSE");
+      cJSON_AddStringToObject(responseJSON, "operation", "IDENTIFY");
+      cJSON_AddStringToObject(responseJSON, "result", "SUCCESS");
+      char username[USERNAME_MAX];
+      parseJSONValue(json, "username", username, sizeof(username));
+      cJSON_AddStringToObject(responseJSON, "extra", username);
+      sendMessage(cJSON_Print(responseJSON), clientFD);
+      cJSON_Delete(responseJSON);
+    } else
+      return false;
   } else if (strcmp(value, "STATUS") == 0) {
     
   } else if (strcmp(value, "USERS") == 0) {
-    
+      sendMessage(GenerateUserListJSON(list),clientFD);
   } else if (strcmp(value, "TEXT") == 0) {
     
   } else if (strcmp(value, "PUBLIC_TEXT") == 0) {
