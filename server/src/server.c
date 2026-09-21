@@ -89,21 +89,30 @@ void* receiveAndSendResponse(void* data) {
       if(!authenticated) {
           if(!StartFirstTimeAuthentication(buffer, &userList, info->socketFD, &user)){
               printf("[SERVER]: Error al autenticar usuario.\n");
+              close(info->socketFD);
               receiving = false;
           } else
               authenticated = true;
       } else if(!determineJSONResponse(buffer, &userList, info->socketFD,user.username)) {
           printf("[SERVER]: Error al procesar petición del usuario %s\n",user.username);
+          DisconnectUser(&userList, user.username, info->socketFD);
+          authenticated = false;
           receiving = false;
       }
     }
-    if(amountReceived == 0)
-      receiving = false;
+    if(amountReceived == 0) {
+        if(!strcmp(user.username, "") == 0) {
+          DisconnectUser(&userList, user.username, info->socketFD);
+          authenticated = false;
+          receiving = false;
+        } else {
+            close(info->socketFD);
+            receiving = false;
+        }
+    }
   }
-  DeleteUser(&userList, user.username);
-  close(info->socketFD);
+  printf("[SERVER]: Cliente desconectado.\n");
   free(info);
-  printf("[SERVER]: Se desconecto el usuario %s.\n",user.username);
   return NULL;
 }
 

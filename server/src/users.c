@@ -91,11 +91,13 @@ bool GetUser(UserList* userList, const char* username,UserEntry* result){
 }
 
 bool DeleteUser(UserList* userList, const char* username) {
-  if(userList == NULL || userList->userList == NULL || username == NULL)
-    return false;
+    if(userList == NULL || userList->userList == NULL || username == NULL) {
+        printf("[SERVER]: Error. Lista de usuarios nula o usuario nulo.\n");
+        return false;
+    }
   UserEntry result = {0};
   bool deleted = false;
-  if(!GetUser(userList, username, &result)) {
+  if(GetUser(userList, username, &result)) {
     pthread_mutex_lock(&userList->mutexLock);
     const UserEntry* removed = hashmap_delete(userList->userList, &result);
     deleted = removed != NULL;
@@ -314,6 +316,16 @@ int StatusStringToStatusInt(char* status) {
         return -1;
 }
 
+bool DisconnectUser(UserList* list, char* username, int clientFD) {
+    if(!DeleteUser(list, username)) {
+        printf("[SERVER]: Error de eliminación de usuario por desconexión.\n"); 
+        return false;
+    }
+    close(clientFD);
+    printf("[SERVER]: Se desconecto el usuario %s.\n",username);
+    return true;
+}
+
 bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* usernameSrc) {
   if(buffer == NULL || list == NULL)
     return false;
@@ -363,7 +375,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
   } else if (strcmp(value, "LEAVE_ROOM") == 0) {
     
   } else if (strcmp(value, "DISCONNECT") == 0) {
-    
+      return DisconnectUser(list, usernameSrc, clientFD);
   } else {
     return false;
   }

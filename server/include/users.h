@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 #include "hashmap.h"
 #include "jsonutil.h"
 
@@ -51,5 +52,7 @@ char* GenerateUserListJSON(UserList* list);
 bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* username); 
 
 bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser); 
+
+bool DisconnectUser(UserList* list, char* username, int clientFD); 
 
 #endif // USERS_H_
