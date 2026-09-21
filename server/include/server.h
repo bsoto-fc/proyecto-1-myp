@@ -11,7 +11,8 @@ void* ReceiveKeyboardCommands();
 void CreateStdinThreadForInput();
 
 struct thread_info{
-  int socketFD;
+    int socketFD;
+    AcceptedSocket* pSocket; // Referencia para poder liberar memoria. 
 };
 
 void* receiveAndPrintIncomingData(void* data); 

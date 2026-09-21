@@ -185,6 +185,7 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
       cJSON* responseJSON = cJSON_CreateObject();
       if(responseJSON == NULL){
         cJSON_Delete(responseJSON);
+        cJSON_Delete(json);
         return false;
       }
       cJSON_AddStringToObject(responseJSON, "type", "RESPONSE");
@@ -193,9 +194,12 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
       char username[USERNAME_MAX];
       parseJSONValue(json, "username", username, sizeof(username));
       cJSON_AddStringToObject(responseJSON, "extra", username);
-      sendMessage(cJSON_PrintUnformatted(responseJSON), clientFD);
+      char* responseJSONString = cJSON_PrintUnformatted(responseJSON);
+      sendMessage(responseJSONString, clientFD);
+      free(responseJSONString);
       if(!GetUser(userList, username, authUser)) {
           cJSON_Delete(responseJSON);
+          cJSON_Delete(json);
           printf("[SERVER]: Usuario se autenticó, pero no se pudo obtener su registro en lista.\n");
           return false;
       }
@@ -207,18 +211,23 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
       }
       cJSON_AddStringToObject(newUserResponseForOtherUsers, "type", "NEW_USER");
       cJSON_AddStringToObject(newUserResponseForOtherUsers, "username", username);
-      Message messageForOtherUsers = {.clientFDSource = clientFD, .message = cJSON_PrintUnformatted(newUserResponseForOtherUsers)};
+      char* newUserResponseForOtherUsersString = cJSON_PrintUnformatted(newUserResponseForOtherUsers);
+      Message messageForOtherUsers = {.clientFDSource = clientFD, .message = newUserResponseForOtherUsersString};
+      free(newUserResponseForOtherUsersString);
       pthread_mutex_lock(&userList->mutexLock);
       hashmap_scan(userList->userList, MessageSenderIterator, &messageForOtherUsers);
       pthread_mutex_unlock(&userList->mutexLock);
       cJSON_Delete(newUserResponseForOtherUsers);
-    } else
+    } else{
+      cJSON_Delete(json);
       return false;
+    }
   } else {
       printf("[SERVER]: Usuario no autenticado quiere realizar operaciones.\n");
       cJSON_Delete(json);
       return false;
   }
+  cJSON_Delete(json);
   return true;
 }
 

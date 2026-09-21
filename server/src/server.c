@@ -112,6 +112,8 @@ void* receiveAndSendResponse(void* data) {
     }
   }
   printf("[SERVER]: Cliente desconectado.\n");
+  if(info->pSocket != NULL)
+      free(info->pSocket);
   free(info);
   return NULL;
 }
@@ -120,15 +122,15 @@ void* receiveAndSendResponse(void* data) {
 void receiveAndSendResponseOnSeparateThread(AcceptedSocket* pSocket) {
   pthread_t id;
   struct thread_info* info = malloc(sizeof(struct thread_info));
+  info->pSocket = pSocket;
   info->socketFD = pSocket->acceptedSocketFD;
   pthread_create(&id, NULL, receiveAndSendResponse, info);
 }
 
 /* Función para empezar a recibir respuestas de los clientes. */
 void startAcceptingIncomingConnections(int serverSocketFD) {
-  AcceptedSocket* clientSocket = NULL;
   while(serverRunning) {
-    clientSocket = acceptIncomingConnection(serverSocketFD);
+    AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
     if(clientSocket == NULL){
         if(!serverRunning)
             break;
@@ -137,8 +139,6 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
     }
     receiveAndSendResponseOnSeparateThread(clientSocket);
   }
-  if(clientSocket != NULL)
-      free(clientSocket);
   printf("[SERVER]: Shutting down...\n");
 }
 
