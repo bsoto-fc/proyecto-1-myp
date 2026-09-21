@@ -24,7 +24,7 @@ uint16_t ReadPortFromString(char* str){
 }
 
 uint16_t ParsePort(int argc, char* argv[]){
-  uint16_t PORT = 1959;
+  uint16_t PORT = 1234;
   // Obtenido de GNU C Library (glibc) manual https://sourceware.org/glibc/manual/latest/html_node/Example-of-Getopt.html
   int opt = 0;
   while((opt = getopt(argc, argv, "p:")) != -1){

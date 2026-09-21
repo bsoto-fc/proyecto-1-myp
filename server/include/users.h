@@ -31,6 +31,11 @@ typedef struct {
     pthread_mutex_t mutexLock;
 } UserList;
 
+typedef struct {
+    int clientFDSource;
+    char* message;
+} Message;
+
 bool InitUserList(UserList* list);
 
 void DestroyUserList(UserList* userList);
@@ -43,6 +48,8 @@ bool GetUser(UserList* userList, const char* username,UserEntry* result);
 
 char* GenerateUserListJSON(UserList* list); 
 
-bool determineJSONResponse(char* buffer, UserList* list, int clientFD); 
+bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* username); 
+
+bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser); 
 
 #endif // USERS_H_

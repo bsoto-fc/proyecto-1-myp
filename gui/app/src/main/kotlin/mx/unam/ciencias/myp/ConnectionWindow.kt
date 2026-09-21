@@ -6,18 +6,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
 
 import mx.unam.ciencias.myp.utils.*
 
 @Composable
-fun ConnectionWindow(onConnect: (String,Int) -> Unit){
+fun ConnectionWindow(connectionError: String = "", onConnect: (String,Int,String) -> Unit){
 
     var ip by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
 
     var errorMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(connectionError) {
+        if(connectionError.isNotEmpty())
+            errorMessage = connectionError
+    }
     
     MaterialTheme {
         Scaffold(
@@ -63,9 +67,23 @@ fun ConnectionWindow(onConnect: (String,Int) -> Unit){
                     )
                     
                     Spacer(modifier = Modifier.width(8.dp))
+
+                    TextField(
+                        value = username,
+                        onValueChange = {
+                            username = it
+                            errorMessage = ""
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Ingresa nombre de usuario.") },
+                        singleLine = true,
+                        isError = errorMessage.isNotEmpty()
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
                     
                     Button(onClick = {
-                               if(ip.isNotBlank() && port.isNotBlank()) {
+                               if(ip.isNotBlank() && port.isNotBlank() && username.isNotBlank()) {
                                    try{
                                        if(!validateIPv4(ip)) 
                                            errorMessage = "Ingresa una IP válida."
@@ -73,7 +91,7 @@ fun ConnectionWindow(onConnect: (String,Int) -> Unit){
                                            errorMessage = "Ingresa un puerto dentro del rango 1-65535"
                                        else {
                                            errorMessage = ""
-                                           onConnect(ip,port.toInt())
+                                           onConnect(ip,port.toInt(),username)
                                        }
                                    } catch(e: NumberFormatException){
                                        errorMessage = "Ingresa un puerto dentro del rango 1-65535"

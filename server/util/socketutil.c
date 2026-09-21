@@ -9,6 +9,10 @@ void error(char* msg){
   exit(EXIT_FAILURE);
 }
 
+void warning(char* msg) {
+    perror(msg);
+}
+
 int CreateTCPIPv4Socket(){
   // IPv4, TCP, IP
   return socket(AF_INET, SOCK_STREAM, 0); // Regresa negativo si algo sale mal.
@@ -43,5 +47,11 @@ struct sockaddr_in* CreateIPv4Address(char* ip, uint16_t port){
 }
 
 void sendMessage(char* buffer, int socketFD){
-  send(socketFD, buffer, strlen(buffer), 0);
+  size_t bufferSize = strlen(buffer);
+  char* bufferWithNewLine = malloc(bufferSize + 1 + 1); // Extra char, trailing 0 https://stackoverflow.com/a/10279911  
+  strcpy(bufferWithNewLine, buffer);
+  bufferWithNewLine[bufferSize] = '\n';
+  bufferWithNewLine[bufferSize + 1] = '\0';
+  send(socketFD, bufferWithNewLine, strlen(bufferWithNewLine), 0);
+  free(bufferWithNewLine);
 }

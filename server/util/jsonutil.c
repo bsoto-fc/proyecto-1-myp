@@ -10,8 +10,10 @@ bool parseJSONValue(cJSON* json, char* key, char* value, size_t valueSize){
   cJSON *data = cJSON_GetObjectItemCaseSensitive(json, key);
   if (cJSON_IsString(data) && (data->valuestring != NULL)) {
     size_t length = strlen(data->valuestring);
-    if(length>=valueSize)
-      return false;
+    if(length>=valueSize) {
+        cJSON_Delete(json);
+        return false;
+    }
     strcpy(value, data->valuestring);
     printf("[JSON]:Key: \"%s\": \"%s\"\n", key, value);
     return true;

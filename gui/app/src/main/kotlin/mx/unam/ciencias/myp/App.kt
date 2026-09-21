@@ -3,24 +3,28 @@
  */
 package mx.unam.ciencias.myp
 
-import androidx.compose.material.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import mx.unam.ciencias.myp.Screens
+
+import mx.unam.ciencias.myp.messages.*
+import mx.unam.ciencias.myp.sockets.SocketClient
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "Compose Demo") {
+    Window(onCloseRequest = ::exitApplication, title = "Xerces Client") {
         screenManager()
     }
 }
 
 enum class Screens {
-    Connection,Chat,Waiting
+    Connection,Chat
 }
 
 @Composable
@@ -29,25 +33,64 @@ fun screenManager() {
 
     var connectedIp by remember { mutableStateOf("") }
     var connectedPort by remember { mutableStateOf(0) }
+    var currentUsername by remember { mutableStateOf("") }
+    var connectionError by remember { mutableStateOf("") }
+
+    val messages = remember { mutableStateListOf<String>() }
+    var client by remember { mutableStateOf<SocketClient?>(null) }
+
+    DisposableEffect(client) {
+        val activeClient = client
+        onDispose { activeClient?.close() }
+    }
 
     when(currentScreen) {
         Screens.Connection -> {
             ConnectionWindow(
-                onConnect = { ip, port ->
-                    connectedIp = ip
-                    connectedPort = port
-                    currentScreen = Screens.Waiting
+                connectionError = connectionError,
+                onConnect = { ip, port, username ->
+                    client = SocketClient(
+                        ip = ip,
+                        port = port,
+                        username = username,
+                        onConnected = {
+                            connectedIp = ip
+                            connectedPort = port
+                            currentUsername = username
+                            messages.clear()
+                            currentScreen = Screens.Chat
+                        },
+                        onMessageReceived = { message->
+                            // runCatching: Corre código y regresa Result, éxito o una excepción. getOrNull() regresa null si hubo excepcion.
+                            val incoming = runCatching {json.decodeFromString<Message>(message)}.getOrNull()
+                            messages.add(incoming?.text ?: message)
+                        },
+                        onDisconnected = { error ->
+                            connectionError = error
+                            client = null
+                            currentScreen = Screens.Connection
+                        }
+                    ).also { it.connect() }
+                    /* .also: versión de Kotlin de algo que en java sería:
+                     SocketClient c = new SocketClient();
+                     c.connect();
+                     client = c;
+                     */
                 }
             )
         }
         Screens.Chat -> {
-            Chat(connectedIp,connectedPort)
-        }
-        Screens.Waiting -> {
-            WaitingWindow(
+            Chat(
                 ip = connectedIp,
                 port = connectedPort,
-                connectFailure = {
+                username = currentUsername,
+                messages = messages,
+                onSend = {text->
+                    val jsonRequest = json.encodeToString(Message(type = "PUBLIC_TEXT",text = text))
+                    client?.send(jsonRequest)
+                },
+                onLeave = {
+                    client = null
                     currentScreen = Screens.Connection
                 }
             )

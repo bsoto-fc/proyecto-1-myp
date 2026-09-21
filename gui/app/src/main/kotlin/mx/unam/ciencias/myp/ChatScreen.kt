@@ -1,7 +1,9 @@
 package mx.unam.ciencias.myp
 
-import androidx.compose.material.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -11,46 +13,61 @@ import androidx.compose.ui.window.application
 
 
 @Composable
-fun Chat(ip: String, port: Int) {
+fun Chat(
+    ip: String,
+    port: Int,
+    username: String,
+    messages: List<String>,
+    onSend: (String) -> Unit,
+    onLeave: () -> Unit
+) {
+    var msgToSend by remember { mutableStateOf("") }
+    
     MaterialTheme {
         Scaffold(
             topBar = {
-                TopAppBar(title = { Text("Xerces") })
+                TopAppBar(
+                    title = { Text("Chat — $username@$ip:$port") },
+                    actions = {
+                        TextButton(onClick = onLeave) { Text("Salir") }
+                    }
+                )
             }
-        ) { paddingValues ->
+        ){ paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-            ) {
-                Box(
+                    .padding(8.dp)
+            ){
+                LazyColumn(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Mensajes.")
+                        .fillMaxWidth()
+                ){
+                    items(messages){ msg ->
+                        Text(msg, modifier = Modifier.padding(vertical = 2.dp))
+                    }
                 }
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
+                        .padding(top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextField(
-                        value = "",
-                        onValueChange = {
-
-                        },
+                        value = msgToSend,
+                        onValueChange = { msgToSend = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Escribe un mensaje") }
+                        label = { Text("Mensaje") },
+                        singleLine = true
                     )
-                    
                     Spacer(modifier = Modifier.width(8.dp))
-                    
                     Button(onClick = {
-
+                               if (msgToSend.isNotBlank()) {
+                                   onSend(msgToSend)
+                                   msgToSend = ""
+                               }
                            }) {
                         Text("Enviar")
                     }
