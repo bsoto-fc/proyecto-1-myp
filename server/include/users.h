@@ -18,7 +18,7 @@
 #define USERNAME_MAX 64
 
 typedef struct {
-    int status;
+    uint8_t status;
     int clientFD;
 } User;
 

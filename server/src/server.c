@@ -126,8 +126,9 @@ void receiveAndSendResponseOnSeparateThread(AcceptedSocket* pSocket) {
 
 /* Función para empezar a recibir respuestas de los clientes. */
 void startAcceptingIncomingConnections(int serverSocketFD) {
+  AcceptedSocket* clientSocket = NULL;
   while(serverRunning) {
-    AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
+    clientSocket = acceptIncomingConnection(serverSocketFD);
     if(clientSocket == NULL){
         if(!serverRunning)
             break;
@@ -136,6 +137,8 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
     }
     receiveAndSendResponseOnSeparateThread(clientSocket);
   }
+  if(clientSocket != NULL)
+      free(clientSocket);
   printf("[SERVER]: Shutting down...\n");
 }
 
