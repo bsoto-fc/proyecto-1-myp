@@ -68,6 +68,7 @@ bool AddUser(UserList* userList, const char* username, int status, int clientFD)
     char* printedJSON = cJSON_PrintUnformatted(errorJSON);
     cJSON_Delete(errorJSON);
     sendMessage(printedJSON, clientFD);
+    free(printedJSON);
     pthread_mutex_unlock(&userList->mutexLock);
     return false;
   }
@@ -153,6 +154,7 @@ char* GenerateUserListJSON(UserList* list) {
   cJSON_AddItemToObject(completeJSON, "users", userJSON);
   char* printedJSON = cJSON_PrintUnformatted(completeJSON);
   cJSON_Delete(completeJSON);
+  free(printedJSON);
   return printedJSON;
 }
 
@@ -240,10 +242,12 @@ bool SendPublicText(char* buffer, UserList* list, char* username, int clientFD) 
   cJSON_AddStringToObject(publicTextJSON, "type", "PUBLIC_TEXT_FROM");
   cJSON_AddStringToObject(publicTextJSON, "username", username);
   cJSON_AddStringToObject(publicTextJSON, "text", buffer);
-  Message messageForOtherUsers = {.clientFDSource = clientFD, .message = cJSON_PrintUnformatted(publicTextJSON)};
+  char* publicTextJSONString = cJSON_PrintUnformatted(publicTextJSON);
+  Message messageForOtherUsers = {.clientFDSource = clientFD, .message = publicTextJSONString};
   pthread_mutex_lock(&list->mutexLock);
   hashmap_scan(list->userList, MessageSenderIterator, &messageForOtherUsers);
   pthread_mutex_unlock(&list->mutexLock);
+  free(publicTextJSONString);
   cJSON_Delete(publicTextJSON);
   return true;
 }
@@ -264,6 +268,7 @@ bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* use
       cJSON_AddStringToObject(publicTextJSON, "extra", usernameDest);
       char* finalMessage = cJSON_PrintUnformatted(publicTextJSON);
       sendMessage(finalMessage, userDest.user.clientFD);
+      free(finalMessage);
       cJSON_Delete(publicTextJSON);
       return true;
   }
@@ -272,6 +277,7 @@ bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* use
   cJSON_AddStringToObject(publicTextJSON, "text", message);
   char* finalMessage = cJSON_PrintUnformatted(publicTextJSON);
   sendMessage(finalMessage, userDest.user.clientFD);
+  free(finalMessage);
   cJSON_Delete(publicTextJSON);
   return true;
 }
@@ -307,9 +313,11 @@ bool ChangeUserStatus(UserList* list, char* username, int status, int clientFD) 
             break;
     }
     cJSON_AddStringToObject(statusJSON, "status", statusString);
-    Message messageForOtherUsers = {.clientFDSource = clientFD, .message = cJSON_PrintUnformatted(statusJSON)};
+    char* statusJSONString = cJSON_PrintUnformatted(statusJSON);
+    Message messageForOtherUsers = {.clientFDSource = clientFD, .message = statusJSONString};
     hashmap_scan(list->userList, MessageSenderIterator, &messageForOtherUsers);
     pthread_mutex_unlock(&list->mutexLock);
+    free(statusJSONString);
     cJSON_Delete(statusJSON);
     return true;
 }
