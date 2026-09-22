@@ -7,11 +7,13 @@
 
 
 /* Boilerplate para comparar en diccionario. */
+#pragma GCC diagnostic ignored "-Wunused-parameter" // Suprimir advertencia de parámetro sin usar. hashmap.c necesita una firma con void* udata.
 int room_compare(const void *a, const void *b, void *udata) {
     const RoomEntry *ra = a;
     const RoomEntry *rb = b;
     return strcmp(ra->roomname, rb->roomname);
 }
+#pragma GCC diagnostic pop
 
 /* Boilerplate de hash. */
 uint64_t room_hash(const void *item, uint64_t seed0, uint64_t seed1) {
@@ -22,6 +24,7 @@ uint64_t room_hash(const void *item, uint64_t seed0, uint64_t seed1) {
 void FreeRoomEntry(void* item) {
     RoomEntry* room = item;
     DestroyUserList(room->roomUsers);
+    free(room->roomUsers);
     room->roomUsers = NULL;
 }
 
@@ -94,5 +97,24 @@ bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* usernam
     sendMessage(printedJSON, srcClientFD);
     free(printedJSON);
     pthread_mutex_unlock(&roomsList->mutexLock);
+    return true;
+}
+
+bool GetRoom(RoomsList* roomsList, char* roomname, RoomEntry* result) {
+    if(roomsList == NULL || roomsList->roomsList == NULL || roomname == NULL)
+        return false;
+    RoomEntry entry = {0};
+    strcpy(entry.roomname, roomname);
+    pthread_mutex_lock(&roomsList->mutexLock);
+    const RoomEntry* found = hashmap_get(roomsList->roomsList, &entry);
+    if(found!=NULL)
+        *result = *found;
+    pthread_mutex_unlock(&roomsList->mutexLock);
+    return found != NULL;
+}
+
+bool InviteToRoom(UserList* userList, RoomsList* roomsList, char* roomname, char* usernameSrc) {
+    // 1. Buscar que la sala exista.
+    // 2. Buscar que todos los usuarios existan.
     return true;
 }

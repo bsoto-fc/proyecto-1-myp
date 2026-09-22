@@ -9,11 +9,13 @@
 #define USERNAME_MAX 64
 
 /* Boilerplate para comparar en diccionario. */
+#pragma GCC diagnostic ignored "-Wunused-parameter" // Suprimir advertencia de parámetro sin usar. hashmap.c necesita una firma con void* udata.
 int user_compare(const void *a, const void *b, void *udata) {
   const UserEntry *ua = a;
   const UserEntry *ub = b;
   return strcmp(ua->username, ub->username);
 }
+#pragma GCC diagnostic pop
 
 /* Boilerplate de hash. */
 uint64_t user_hash(const void *item, uint64_t seed0, uint64_t seed1) {
@@ -221,10 +223,10 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
       cJSON_AddStringToObject(newUserResponseForOtherUsers, "username", username);
       char* newUserResponseForOtherUsersString = cJSON_PrintUnformatted(newUserResponseForOtherUsers);
       Message messageForOtherUsers = {.clientFDSource = clientFD, .message = newUserResponseForOtherUsersString};
-      free(newUserResponseForOtherUsersString);
       pthread_mutex_lock(&userList->mutexLock);
       hashmap_scan(userList->userList, MessageSenderIterator, &messageForOtherUsers);
       pthread_mutex_unlock(&userList->mutexLock);
+      free(newUserResponseForOtherUsersString);
       cJSON_Delete(newUserResponseForOtherUsers);
     } else{
       cJSON_Delete(json);
@@ -352,6 +354,20 @@ bool DisconnectUser(UserList* list, char* username, int clientFD) {
     }
     close(clientFD);
     printf("[SERVER]: Se desconecto el usuario %s.\n",username);
+    cJSON* disconnectJSON = cJSON_CreateObject();
+    if(disconnectJSON == NULL) {
+        printf("[SERVER]: Error al mandar respuesta de usuario desconectado.");
+        return false;
+    }
+    cJSON_AddStringToObject(disconnectJSON, "type", "DISCONNECTED");
+    cJSON_AddStringToObject(disconnectJSON, "username", username);
+    char* disconnectJSONString = cJSON_PrintUnformatted(disconnectJSON);
+    Message messageForOtherUsers = {.clientFDSource = clientFD, .message = disconnectJSONString};
+    pthread_mutex_lock(&list->mutexLock);
+    hashmap_scan(list->userList, MessageSenderIterator, &messageForOtherUsers);
+    pthread_mutex_unlock(&list->mutexLock);
+    free(disconnectJSONString);
+    cJSON_Delete(disconnectJSON);
     return true;
 }
 
@@ -369,6 +385,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
     return false;
   if(strcmp(value, "IDENTIFY") == 0) {
       printf("[SERVER]: Usuario ya autenticado quiere autenticarse de nuevo. \n");
+      // TO DO: Enviar respuesta de usuario ya existente.
       return false;
   } else if (strcmp(value, "STATUS") == 0) {
       char statusMessage[10];
