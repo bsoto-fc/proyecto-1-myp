@@ -13,11 +13,13 @@
 #include "../util/socketutil.h"
 #include "../util/jsonutil.h"
 #include "users.h"
+#include "rooms.h"
 
 bool serverRunning = false;
 int serverSocketFD = -1;
 pthread_t keyboardID;
 UserList userList;
+RoomsList globalRoomsList;
 
 // TO DO: Pasarlo a pruebas unitarias.
 /* Función que añade usuarios de prueba. */
@@ -93,7 +95,7 @@ void* receiveAndSendResponse(void* data) {
               receiving = false;
           } else
               authenticated = true;
-      } else if(!determineJSONResponse(buffer, &userList, info->socketFD,user.username)) {
+      } else if(!determineJSONResponse(buffer, &userList, info->socketFD,user.username, &globalRoomsList)) {
           printf("[SERVER]: Error al procesar petición del usuario %s\n",user.username);
           DisconnectUser(&userList, user.username, info->socketFD);
           authenticated = false;
@@ -174,6 +176,12 @@ void StartServer(uint16_t port, char* ip) {
     error("Error al crear lista de usuarios.\n");
   } 
 
+  if(!InitRoomList(&globalRoomsList)) {
+    close(serverSocketFD);
+    free(serverAddr);
+    error("Error al crear lista de salas.\n");
+  } 
+
   serverRunning = true;
 
   signal(SIGINT,ShutdownServer);
@@ -188,5 +196,6 @@ void StartServer(uint16_t port, char* ip) {
 
   free(serverAddr);
   DestroyUserList(&userList);
+  DestroyRoomList(&globalRoomsList);
 }
 

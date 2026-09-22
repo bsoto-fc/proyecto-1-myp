@@ -2,7 +2,7 @@ threads_dep = dependency('threads')
 
 server_lib = static_library(
   'server-core',
-  ['argparser.c', 'server.c', 'users.c',],
+  ['argparser.c', 'server.c', 'users.c','rooms.c'],
   include_directories: [project_inc, util_inc,],
   dependencies: [
     util_dep,

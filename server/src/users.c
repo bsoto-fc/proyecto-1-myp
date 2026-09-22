@@ -1,10 +1,10 @@
-#include "users.h"
-#include "../util/socketutil.h"
-#include "socketutil.h"
 #include <cjson/cJSON.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
+#include "users.h"
+#include "socketutil.h"
+#include "rooms.h"
 
 #define USERNAME_MAX 64
 
@@ -91,6 +91,7 @@ bool GetUser(UserList* userList, const char* username,UserEntry* result){
   return found != NULL;
 }
 
+/* Toma una lista de usuarios y borra un usuario por su nombre. Regresa false ante cualquier error. */
 bool DeleteUser(UserList* userList, const char* username) {
     if(userList == NULL || userList->userList == NULL || username == NULL) {
         printf("[SERVER]: Error. Lista de usuarios nula o usuario nulo.\n");
@@ -107,10 +108,12 @@ bool DeleteUser(UserList* userList, const char* username) {
   return deleted;
 }
 
+/* Regresa true si la lista de usuarios es vacía. */
 bool UserListIsEmpty(UserList* list) {
   return hashmap_count(list->userList) == 0;
 }
 
+/* Iterador de usuarios que añade cada usuario y su estado a una referencia json. */
 bool UserToJSONIterator(const void* item, void* udata) {
   const UserEntry* ue = item;
   cJSON* json = udata;
@@ -131,6 +134,7 @@ bool UserToJSONIterator(const void* item, void* udata) {
   return true;
 }
 
+/* Iterador de usuarios que manda un mensaje a todos los usuarios menos al que lo manda. */
 bool MessageSenderIterator(const void* item, void* udata) {
   const UserEntry* ue = item;
   Message* message = udata;
@@ -139,6 +143,7 @@ bool MessageSenderIterator(const void* item, void* udata) {
   return true;
 }
 
+/* Regresa la lista de usuarios en formato json dada una referencia a alguna lista de usuarios. */
 char* GenerateUserListJSON(UserList* list) {
   cJSON* completeJSON = cJSON_CreateObject();
   cJSON* userJSON = cJSON_CreateObject();
@@ -154,10 +159,10 @@ char* GenerateUserListJSON(UserList* list) {
   cJSON_AddItemToObject(completeJSON, "users", userJSON);
   char* printedJSON = cJSON_PrintUnformatted(completeJSON);
   cJSON_Delete(completeJSON);
-  free(printedJSON);
   return printedJSON;
 }
 
+/* Función que identifica usuarios. Regresa false si ocurre algún error. */
 bool AuthenticateUser(UserList* userList, int clientFD, cJSON* json) {
   if(userList == NULL || userList->userList == NULL)
     return false;
@@ -173,6 +178,7 @@ bool AuthenticateUser(UserList* userList, int clientFD, cJSON* json) {
   return false;
 }
 
+/* Función que inicia el proceso de autenticación para un nuevo usuario. Regresa false ante cualquier error. */
 bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser) {
   if(buffer == NULL || userList == NULL || userList->userList == NULL)
     return false;
@@ -233,6 +239,7 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
   return true;
 }
 
+/* Función para mandar un mensaje público. Regresa false si no pudo mandarse. */
 bool SendPublicText(char* buffer, UserList* list, char* username, int clientFD) {
   if(buffer == NULL || list == NULL || list->userList == NULL)
     return false;
@@ -251,7 +258,7 @@ bool SendPublicText(char* buffer, UserList* list, char* username, int clientFD) 
   cJSON_Delete(publicTextJSON);
   return true;
 }
-
+/* Función para mandarle un mensaje privado a un usuario dado. Regresa false si no pudo mandarse. */
 bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* usernameDest) {
   if(message == NULL || list == NULL || list->userList == NULL)
     return false;
@@ -282,6 +289,8 @@ bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* use
   return true;
 }
 
+/* Función para cambiar el estado de un usuario.
+ * Regresa false ante cualquier error. */
 bool ChangeUserStatus(UserList* list, char* username, int status, int clientFD) {
     if(list == NULL || list->userList == NULL || username == NULL)
         return false;
@@ -322,6 +331,8 @@ bool ChangeUserStatus(UserList* list, char* username, int status, int clientFD) 
     return true;
 }
 
+/* Función para traducir un string "STATUS" a un entero que el servidor pueda interpretar.
+ * Regresa -1 si es un estado desconocido. */
 int StatusStringToStatusInt(char* status) {
     if(strcmp(status, "AWAY") == 0) {
         return AWAY;
@@ -333,6 +344,7 @@ int StatusStringToStatusInt(char* status) {
         return -1;
 }
 
+/* Función para manejar la desconexión de usuarios. Regresa false ante cualquier error. */
 bool DisconnectUser(UserList* list, char* username, int clientFD) {
     if(!DeleteUser(list, username)) {
         printf("[SERVER]: Error de eliminación de usuario por desconexión.\n"); 
@@ -343,7 +355,10 @@ bool DisconnectUser(UserList* list, char* username, int clientFD) {
     return true;
 }
 
-bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* usernameSrc) {
+/* Función que se llama ante cualquier petición excepto por ka autenticación inicial.
+ * Inicia el proceso para dar una respuesta ante alguna petición.
+ * Regresa false si ocurre algún error. */
+bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* usernameSrc, RoomsList* roomsList) {
   if(buffer == NULL || list == NULL)
     return false;
   cJSON* json = cJSON_Parse(buffer);
@@ -368,6 +383,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       if(userListMessage == NULL)
           return false;
       sendMessage(userListMessage,clientFD);
+      free(userListMessage);
   } else if (strcmp(value, "TEXT") == 0) {
       char message[1024];
       char usernameDest[USERNAME_MAX];
@@ -380,7 +396,10 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
           return false;
       SendPublicText(message, list,usernameSrc,clientFD);
   } else if (strcmp(value, "NEW_ROOM") == 0) {
-    
+      char roomname[ROOMNAME_MAX];
+      if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname)))
+          return false;
+      AddRoom(list, roomsList, roomname, usernameSrc, clientFD);
   } else if (strcmp(value, "INVITE") == 0) {
     
   } else if (strcmp(value, "JOIN_ROOM") == 0) {

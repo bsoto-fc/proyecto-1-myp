@@ -16,6 +16,7 @@
 #define BUSY 3
 
 #define USERNAME_MAX 64
+#define ROOMNAME_MAX 64
 
 typedef struct {
     uint8_t status;
@@ -37,6 +38,16 @@ typedef struct {
     char* message;
 } Message;
 
+typedef struct {
+    char roomname[ROOMNAME_MAX]; 
+    UserList* roomUsers;
+} RoomEntry;
+
+typedef struct {
+    struct hashmap* roomsList;
+    pthread_mutex_t mutexLock;
+} RoomsList;
+
 bool InitUserList(UserList* list);
 
 void DestroyUserList(UserList* userList);
@@ -49,7 +60,7 @@ bool GetUser(UserList* userList, const char* username,UserEntry* result);
 
 char* GenerateUserListJSON(UserList* list); 
 
-bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* username); 
+bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* usernameSrc, RoomsList* roomsList); 
 
 bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser); 
 

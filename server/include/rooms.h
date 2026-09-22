@@ -2,13 +2,15 @@
 #define ROOMS_H_
 
 #include "hashmap.h"
-#include "users.h"
 #include <pthread.h>
+#include "users.h"
 
-typedef struct {
-    int roomNo;
-    UserList roomUsers;
-    pthread_mutex_t mutexLock;
-} Room;
+bool CreateRoom(UserList* list, RoomsList* roomsList, char* roomname, char* username); 
+
+bool InitRoomList(RoomsList* roomsList); 
+
+bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* username,int srcClientFD);
+
+void DestroyRoomList(RoomsList* roomsList);
 
 #endif // ROOMS_H_
