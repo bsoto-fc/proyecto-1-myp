@@ -67,6 +67,4 @@ bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD
 
 bool DisconnectUser(UserList* list, char* username, int clientFD); 
 
-bool MessageSenderIterator(const void* item, void* udata); 
-
 #endif // USERS_H_
