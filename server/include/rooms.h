@@ -13,4 +13,6 @@ bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* usernam
 
 void DestroyRoomList(RoomsList* roomsList);
 
+bool GetRoom(RoomsList* roomsList, char* roomname, RoomEntry* result); 
+
 #endif // ROOMS_H_

@@ -116,5 +116,10 @@ bool GetRoom(RoomsList* roomsList, char* roomname, RoomEntry* result) {
 bool InviteToRoom(UserList* userList, RoomsList* roomsList, char* roomname, char* usernameSrc) {
     // 1. Buscar que la sala exista.
     // 2. Buscar que todos los usuarios existan.
+    RoomEntry* foundRoom = NULL;
+    if(!GetRoom(roomsList, roomname, foundRoom)) {
+        printf("[SERVER]: No se encotró la habitación %s.\n",roomname);
+        return false;
+    }
     return true;
 }

@@ -356,7 +356,7 @@ bool DisconnectUser(UserList* list, char* username, int clientFD) {
     printf("[SERVER]: Se desconecto el usuario %s.\n",username);
     cJSON* disconnectJSON = cJSON_CreateObject();
     if(disconnectJSON == NULL) {
-        printf("[SERVER]: Error al mandar respuesta de usuario desconectado.");
+        printf("[SERVER]: Error al mandar respuesta de usuario desconectado.\n");
         return false;
     }
     cJSON_AddStringToObject(disconnectJSON, "type", "DISCONNECTED");
@@ -385,7 +385,6 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
     return false;
   if(strcmp(value, "IDENTIFY") == 0) {
       printf("[SERVER]: Usuario ya autenticado quiere autenticarse de nuevo. \n");
-      // TO DO: Enviar respuesta de usuario ya existente.
       return false;
   } else if (strcmp(value, "STATUS") == 0) {
       char statusMessage[10];
@@ -418,7 +417,58 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
           return false;
       AddRoom(list, roomsList, roomname, usernameSrc, clientFD);
   } else if (strcmp(value, "INVITE") == 0) {
-    
+      UserList* roomUserList = malloc(sizeof(UserList));
+      if(roomUserList == NULL) {
+          printf("[SERVER]: Error en reservación de memoria para lista de usuarios en sala\n");
+          return false;
+      }
+      if(!InitUserList(roomUserList)){
+          printf("[SERVER]: Error en inicialización de lista de usuarios en sala.\n");
+          return false;
+      }
+      cJSON* usernames = cJSON_GetObjectItemCaseSensitive(json, "usernames");
+      if(!cJSON_IsArray(usernames)) {
+          printf("[SERVER]: usernames en JSON recibido no es un arreglo.\n");
+          DestroyUserList(roomUserList);
+          free(roomUserList);
+          cJSON_Delete(usernames);
+          return false;
+      }
+      cJSON* username = NULL;
+      cJSON_ArrayForEach(username, usernames) {
+          if(cJSON_IsString(username)) {
+              UserEntry foundUser = {0};
+              if(!GetUser(list, username->valuestring, &foundUser)) {
+                  printf("[SERVER]: usernames en JSON recibido contiene un usuario no existente.\n");
+                  cJSON* disconnectJSON = cJSON_CreateObject();
+                  if(disconnectJSON == NULL) {
+                      printf("[SERVER]: Error al mandar respuesta de usuario inexistente.\n");
+                      DestroyUserList(roomUserList);
+                      free(roomUserList);
+                      return false;
+                  }
+                  cJSON_AddStringToObject(disconnectJSON, "type", "RESPONSE");
+                  cJSON_AddStringToObject(disconnectJSON, "operation", "INVITE");
+                  cJSON_AddStringToObject(disconnectJSON, "result", "NO_SUCH_USER");
+                  cJSON_AddStringToObject(disconnectJSON, "extra", username->valuestring);
+                  char* disconnectJSONString = cJSON_PrintUnformatted(disconnectJSON);
+                  sendMessage(disconnectJSONString, clientFD);
+                  free(disconnectJSONString);
+                  cJSON_Delete(disconnectJSON);
+                  DestroyUserList(roomUserList);
+                  free(roomUserList);
+                  return true;
+              } else {
+                  AddUser(roomUserList, foundUser.username, foundUser.user.status, foundUser.user.clientFD);
+              }
+          } else {
+              printf("[SERVER]: usernames en JSON recibido contiene un objeto que no es String.\n");
+              DestroyUserList(roomUserList);
+              free(roomUserList);
+              return false;
+          }
+      }
+      cJSON_Delete(usernames);
   } else if (strcmp(value, "JOIN_ROOM") == 0) {
     
   } else if (strcmp(value, "ROOM_USERS") == 0) {
