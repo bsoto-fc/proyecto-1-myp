@@ -23,10 +23,16 @@ uint64_t user_hash(const void *item, uint64_t seed0, uint64_t seed1) {
   return hashmap_sip(user->username, strlen(user->username), seed0, seed1);
 }
 
+void FreeUserEntry(void* item) {
+    UserEntry* ue = item;
+    if(ue->user!= NULL)
+        free(ue->user);
+}
+
 /* Inicializa la lista de usuarios del servidor. Regresa false si hubo algún error. Reserva memoria
  * en heap y debe ser destruida con la función DestroyUserList().*/
 bool InitUserList(UserList* list){
-  list->userList = hashmap_new(sizeof(UserEntry), 0, 0, 0, user_hash, user_compare, NULL, NULL);
+  list->userList = hashmap_new(sizeof(UserEntry), 0, 0, 0, user_hash, user_compare, FreeUserEntry, NULL);
   if(list->userList == NULL)
     return false;
   if(pthread_mutex_init(&list->mutexLock, NULL) != 0){
@@ -52,7 +58,10 @@ bool AddUser(UserList* userList, const char* username, int status, int clientFD)
     return false;
   if(strlen(username) >= USERNAME_MAX)
     return false;
-  UserEntry entry = { .user = {.status = status, .clientFD = clientFD} };
+  User* userPointer = malloc(sizeof(User));
+  userPointer->status = status;
+  userPointer->clientFD = clientFD;
+  UserEntry entry = { .user = userPointer };
   strcpy(entry.username, username);
   pthread_mutex_lock(&userList->mutexLock);
   const UserEntry* existingUser = hashmap_get(userList->userList,&entry);
@@ -61,6 +70,7 @@ bool AddUser(UserList* userList, const char* username, int status, int clientFD)
     cJSON* errorJSON = cJSON_CreateObject();
     if(errorJSON == NULL){
         cJSON_Delete(errorJSON);
+        pthread_mutex_unlock(&userList->mutexLock);
         return false;
     }
     cJSON_AddStringToObject(errorJSON, "type", "RESPONSE");
@@ -99,15 +109,17 @@ bool DeleteUser(UserList* userList, const char* username) {
         printf("[SERVER]: Error. Lista de usuarios nula o usuario nulo.\n");
         return false;
     }
-  UserEntry result = {0};
-  bool deleted = false;
-  if(GetUser(userList, username, &result)) {
-    pthread_mutex_lock(&userList->mutexLock);
-    const UserEntry* removed = hashmap_delete(userList->userList, &result);
-    deleted = removed != NULL;
-    pthread_mutex_unlock(&userList->mutexLock);
-  }
-  return deleted;
+    UserEntry result = {0};
+    bool deleted = false;
+    if(GetUser(userList, username, &result)) {
+        pthread_mutex_lock(&userList->mutexLock);
+        const UserEntry* removed = hashmap_delete(userList->userList, &result);
+        deleted = removed != NULL;
+        if(removed->user != NULL)
+            free(removed->user);
+        pthread_mutex_unlock(&userList->mutexLock);
+    }
+    return deleted;
 }
 
 /* Regresa true si la lista de usuarios es vacía. */
@@ -120,7 +132,7 @@ bool UserToJSONIterator(const void* item, void* udata) {
   const UserEntry* ue = item;
   cJSON* json = udata;
   char* status;
-  switch (ue->user.status) {
+  switch (ue->user->status) {
   case AWAY:
     status = "AWAY";
     break;
@@ -140,8 +152,8 @@ bool UserToJSONIterator(const void* item, void* udata) {
 bool MessageSenderIterator(const void* item, void* udata) {
   const UserEntry* ue = item;
   Message* message = udata;
-  if(!(message->clientFDSource == ue->user.clientFD))
-      sendMessage(message->message, ue->user.clientFD);
+  if(!(message->clientFDSource == ue->user->clientFD))
+      sendMessage(message->message, ue->user->clientFD);
   return true;
 }
 
@@ -276,7 +288,7 @@ bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* use
       cJSON_AddStringToObject(publicTextJSON, "result", "NO_SUCH_USER");
       cJSON_AddStringToObject(publicTextJSON, "extra", usernameDest);
       char* finalMessage = cJSON_PrintUnformatted(publicTextJSON);
-      sendMessage(finalMessage, userDest.user.clientFD);
+      sendMessage(finalMessage, userDest.user->clientFD);
       free(finalMessage);
       cJSON_Delete(publicTextJSON);
       return true;
@@ -285,7 +297,7 @@ bool SendPrivateText(char* message, UserList* list, char* usernameSrc, char* use
   cJSON_AddStringToObject(publicTextJSON, "username", usernameSrc);
   cJSON_AddStringToObject(publicTextJSON, "text", message);
   char* finalMessage = cJSON_PrintUnformatted(publicTextJSON);
-  sendMessage(finalMessage, userDest.user.clientFD);
+  sendMessage(finalMessage, userDest.user->clientFD);
   free(finalMessage);
   cJSON_Delete(publicTextJSON);
   return true;
@@ -303,12 +315,13 @@ bool ChangeUserStatus(UserList* list, char* username, int status, int clientFD) 
         printf("[SERVER]: Error: No se encontró al usuario al que se le quería cambiar el estado.\n");
         return false;
     }
-    entry.user.status = status;
     pthread_mutex_lock(&list->mutexLock);
-    hashmap_set(list->userList, &entry);
+    entry.user->status = status;
     cJSON* statusJSON = cJSON_CreateObject();
-    if(statusJSON == NULL)
+    if(statusJSON == NULL) {
+        pthread_mutex_unlock(&list->mutexLock);
         return false;
+    }
     cJSON_AddStringToObject(statusJSON, "type", "NEW_STATUS");
     cJSON_AddStringToObject(statusJSON, "username", username);
     char* statusString;
@@ -385,19 +398,22 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
     return false;
   if(strcmp(value, "IDENTIFY") == 0) {
       printf("[SERVER]: Usuario ya autenticado quiere autenticarse de nuevo. \n");
-      return false;
+      goto error;
   } else if (strcmp(value, "STATUS") == 0) {
       char statusMessage[10];
-      if(!parseJSONValue(json,"status",statusMessage,sizeof(statusMessage)))
+      if(!parseJSONValue(json,"status",statusMessage,sizeof(statusMessage))) {
           return false;
+      }
       int status = StatusStringToStatusInt(statusMessage);
-      if(status == -1)
-          return false;
+      if(status == -1) {
+          goto error;
+      }
       ChangeUserStatus(list, usernameSrc, status, clientFD);
   } else if (strcmp(value, "USERS") == 0) {
       char* userListMessage = GenerateUserListJSON(list);
-      if(userListMessage == NULL)
-          return false;
+      if(userListMessage == NULL) {
+          goto error;
+      }
       sendMessage(userListMessage,clientFD);
       free(userListMessage);
   } else if (strcmp(value, "TEXT") == 0) {
@@ -415,62 +431,33 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname)))
           return false;
-      AddRoom(list, roomsList, roomname, usernameSrc, clientFD);
-  } else if (strcmp(value, "INVITE") == 0) {
-      UserList* roomUserList = malloc(sizeof(UserList));
-      if(roomUserList == NULL) {
-          printf("[SERVER]: Error en reservación de memoria para lista de usuarios en sala\n");
-          return false;
+      if(!AddRoom(list, roomsList, roomname, usernameSrc, clientFD)) {
+          printf("[SERVER]: Error creando habitación.\n");
+          goto error;
       }
-      if(!InitUserList(roomUserList)){
-          printf("[SERVER]: Error en inicialización de lista de usuarios en sala.\n");
+  } else if (strcmp(value, "INVITE") == 0) {
+      char roomname[ROOMNAME_MAX];
+      if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
+          printf("[SERVER]: Nombre de habitación inválido.\n");
           return false;
       }
       cJSON* usernames = cJSON_GetObjectItemCaseSensitive(json, "usernames");
       if(!cJSON_IsArray(usernames)) {
           printf("[SERVER]: usernames en JSON recibido no es un arreglo.\n");
-          DestroyUserList(roomUserList);
-          free(roomUserList);
           cJSON_Delete(usernames);
-          return false;
+          goto error;
       }
-      cJSON* username = NULL;
-      cJSON_ArrayForEach(username, usernames) {
-          if(cJSON_IsString(username)) {
-              UserEntry foundUser = {0};
-              if(!GetUser(list, username->valuestring, &foundUser)) {
-                  printf("[SERVER]: usernames en JSON recibido contiene un usuario no existente.\n");
-                  cJSON* disconnectJSON = cJSON_CreateObject();
-                  if(disconnectJSON == NULL) {
-                      printf("[SERVER]: Error al mandar respuesta de usuario inexistente.\n");
-                      DestroyUserList(roomUserList);
-                      free(roomUserList);
-                      return false;
-                  }
-                  cJSON_AddStringToObject(disconnectJSON, "type", "RESPONSE");
-                  cJSON_AddStringToObject(disconnectJSON, "operation", "INVITE");
-                  cJSON_AddStringToObject(disconnectJSON, "result", "NO_SUCH_USER");
-                  cJSON_AddStringToObject(disconnectJSON, "extra", username->valuestring);
-                  char* disconnectJSONString = cJSON_PrintUnformatted(disconnectJSON);
-                  sendMessage(disconnectJSONString, clientFD);
-                  free(disconnectJSONString);
-                  cJSON_Delete(disconnectJSON);
-                  DestroyUserList(roomUserList);
-                  free(roomUserList);
-                  return true;
-              } else {
-                  AddUser(roomUserList, foundUser.username, foundUser.user.status, foundUser.user.clientFD);
-              }
-          } else {
-              printf("[SERVER]: usernames en JSON recibido contiene un objeto que no es String.\n");
-              DestroyUserList(roomUserList);
-              free(roomUserList);
-              return false;
-          }
+      if(!InviteToRoom(list, roomsList, usernames, roomname, usernameSrc ,clientFD)) {
+          goto error;
       }
       cJSON_Delete(usernames);
   } else if (strcmp(value, "JOIN_ROOM") == 0) {
-    
+      char roomname[ROOMNAME_MAX];
+      if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
+          printf("[SERVER]: Nombre de habitación inválido.\n");
+          return false;
+      }
+      JoinRoom(roomsList, roomname, usernameSrc, clientFD);
   } else if (strcmp(value, "ROOM_USERS") == 0) {
     
   } else if (strcmp(value, "ROOM_TEXT") == 0) {
@@ -480,8 +467,11 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
   } else if (strcmp(value, "DISCONNECT") == 0) {
       return DisconnectUser(list, usernameSrc, clientFD);
   } else {
-    return false;
+      goto error;
   }
+  cJSON_Delete(json);
+  return true;
+  error:
   cJSON_Delete(json);
   return true;
 }

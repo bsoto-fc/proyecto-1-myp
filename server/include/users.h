@@ -25,7 +25,7 @@ typedef struct {
 
 typedef struct {
     char username[USERNAME_MAX];
-    User user;
+    User* user;
 } UserEntry;
 
 typedef struct {
@@ -41,6 +41,7 @@ typedef struct {
 typedef struct {
     char roomname[ROOMNAME_MAX]; 
     UserList* roomUsers;
+    UserList* invitedUsers;
 } RoomEntry;
 
 typedef struct {
@@ -65,5 +66,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
 bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser); 
 
 bool DisconnectUser(UserList* list, char* username, int clientFD); 
+
+bool MessageSenderIterator(const void* item, void* udata); 
 
 #endif // USERS_H_
