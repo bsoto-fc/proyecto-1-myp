@@ -15,8 +15,8 @@
 #define ACTIVE 2
 #define BUSY 3
 
-#define USERNAME_MAX 64
-#define ROOMNAME_MAX 64
+#define USERNAME_MAX 9 // 8 caracteres + \0
+#define ROOMNAME_MAX 17 // 16 caracteres + \0
 
 typedef struct {
     uint8_t status;

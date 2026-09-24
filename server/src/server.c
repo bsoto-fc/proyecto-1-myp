@@ -74,7 +74,7 @@ void CreateStdinThreadForInput(){
 /* Función que recibe peticiones JSON y manda respuestas al cliente. */
 void* receiveAndSendResponse(void* data) {
   printf("[SERVER]: Cliente conectado.\n");
-  char buffer[1024];
+  char buffer[1024*1024];
 
   struct thread_info* info = data;
 
@@ -87,10 +87,20 @@ void* receiveAndSendResponse(void* data) {
     if(amountReceived > 0) {
       // To do: Implementar un manejo ante buffer overflows (mensajes más largos que 1024).
       buffer[amountReceived-1] = '\0';
+      if(buffer[0] == '\0') // Ignorar solo salto de linea
+          continue;
       printf("[SERVER]: Cliente mando: \"%s\"\n",buffer);
       if(!authenticated) {
           if(!StartFirstTimeAuthentication(buffer, &userList, info->socketFD, &user)){
               printf("[SERVER]: Error al autenticar usuario.\n");
+              cJSON* invalidJSON = cJSON_CreateObject();
+              cJSON_AddStringToObject(invalidJSON, "type", "RESPONSE");
+              cJSON_AddStringToObject(invalidJSON, "operation", "INVALID");
+              cJSON_AddStringToObject(invalidJSON, "result", "INVALID");
+              char* invalidString = cJSON_PrintUnformatted(invalidJSON);
+              sendMessage(invalidString,info->socketFD);
+              free(invalidString);
+              cJSON_Delete(invalidJSON);
               close(info->socketFD);
               receiving = false;
           } else
