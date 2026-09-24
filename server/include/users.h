@@ -65,8 +65,18 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
 
 bool StartFirstTimeAuthentication(char* buffer, UserList* userList, int clientFD, UserEntry* authUser); 
 
-bool DisconnectUser(UserList* list, char* username, int clientFD); 
+bool DisconnectUser(UserList* list, RoomsList* roomsList, char* username, int clientFD); 
 
 bool MessageSenderIterator(const void* item, void* udata); 
+
+bool UserToJSONIterator(const void* item, void* udata); 
+
+bool SendPublicText(char* buffer, UserList* list, char* username, int clientFD); 
+
+bool InitUserListRef(UserList* list);
+
+bool AddUserRef(UserList* userList, const char* username, User* user);
+
+bool UserListIsEmpty(UserList* list); 
 
 #endif // USERS_H_

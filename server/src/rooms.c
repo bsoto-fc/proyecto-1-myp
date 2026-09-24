@@ -1,3 +1,4 @@
+#include <cjson/cJSON.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <string.h>
@@ -51,16 +52,30 @@ void DestroyRoomList(RoomsList* roomsList){
     roomsList->roomsList = NULL;
 } 
 
+bool GetRoom(RoomsList* roomsList, const char* roomname, RoomEntry* result) {
+    if(roomsList == NULL || roomsList->roomsList == NULL || roomname == NULL)
+        return false;
+    RoomEntry entry = {0};
+    if(strlen(roomname)>=ROOMNAME_MAX)
+        return false;
+    strcpy(entry.roomname, roomname);
+    pthread_mutex_lock(&roomsList->mutexLock);
+    const RoomEntry* found = hashmap_get(roomsList->roomsList, &entry);
+    if(found!=NULL)
+        *result = *found;
+    pthread_mutex_unlock(&roomsList->mutexLock);
+    return found != NULL;
+}
+
 bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* username, int srcClientFD) {
     if(list == NULL || list->userList == NULL || roomsList == NULL || roomsList->roomsList == NULL || username == NULL)
         return false;
     if(strlen(roomname) >= ROOMNAME_MAX)
         return false;
-    RoomEntry newRoom = { .roomUsers=list };
+    RoomEntry newRoom = {0};
     strcpy(newRoom.roomname, roomname);
-    pthread_mutex_lock(&roomsList->mutexLock);
-    const RoomEntry* existingRoom = hashmap_get(roomsList->roomsList,&newRoom);
-    if(existingRoom != NULL) {
+    RoomEntry existingRoom = {0};
+    if(GetRoom(roomsList, roomname, &existingRoom)) {
         printf("[SERVER]: Error al crear sala: Sala existente.\n");
         cJSON* errorJSON = cJSON_CreateObject();
         if(errorJSON == NULL){
@@ -75,16 +90,33 @@ bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* usernam
         cJSON_Delete(errorJSON);
         sendMessage(printedJSON, srcClientFD);
         free(printedJSON);
+        return false;
+    }
+    pthread_mutex_lock(&roomsList->mutexLock);
+    // TO DO: Hacer el siguiente código más seguro.
+    UserEntry userEntry = {0};
+    if(!GetUser(list, username, &userEntry)) {
+        printf("[SERVER]: Error al obtener usuario.\n");
         pthread_mutex_unlock(&roomsList->mutexLock);
         return false;
     }
-    // TO DO: Hacer el siguiente código más seguro.
-    UserEntry* userEntry = NULL;
-    GetUser(list, username, userEntry);
     UserList* roomList = malloc(sizeof(UserList));
-    InitUserList(roomList);
-    AddUser(roomList, username, userEntry->user->status, srcClientFD);
+    if(roomList == NULL || !InitUserListRef(roomList)){
+        free(roomList);
+        pthread_mutex_unlock(&roomsList->mutexLock);
+        return false;
+    }
+    UserList* invitedList = malloc(sizeof(UserList));
+    if(invitedList == NULL || !InitUserListRef(invitedList)) {
+        DestroyUserList(roomList);
+        free(roomList);
+        free(invitedList);
+        pthread_mutex_unlock(&roomsList->mutexLock);
+        return false;
+    }
+    AddUserRef(roomList, username, userEntry.user);
     newRoom.roomUsers = roomList;
+    newRoom.invitedUsers = invitedList;
     hashmap_set(roomsList->roomsList, &newRoom);
     cJSON* successJSON = cJSON_CreateObject();
     if(successJSON == NULL){
@@ -103,19 +135,19 @@ bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* usernam
     return true;
 }
 
-bool GetRoom(RoomsList* roomsList, char* roomname, RoomEntry* result) {
+bool DeleteRoom(RoomsList* roomsList, const char* roomname) {
     if(roomsList == NULL || roomsList->roomsList == NULL || roomname == NULL)
         return false;
-    RoomEntry entry = {0};
-    strcpy(entry.roomname, roomname);
-    pthread_mutex_lock(&roomsList->mutexLock);
-    const RoomEntry* found = hashmap_get(roomsList->roomsList, &entry);
-    if(found!=NULL)
-        *result = *found;
-    pthread_mutex_unlock(&roomsList->mutexLock);
-    return found != NULL;
+    RoomEntry result = {0};
+    bool deleted = false;
+    if(GetRoom(roomsList, roomname, &result)) {
+        pthread_mutex_lock(&roomsList->mutexLock);
+        const RoomEntry* removed = hashmap_delete(roomsList->roomsList,&result);
+        deleted = removed != NULL;
+        pthread_mutex_unlock(&roomsList->mutexLock);
+    }
+    return deleted;
 }
-
 typedef struct {
     int clientFDSource;
     char* usernameSrc;
@@ -127,17 +159,15 @@ typedef struct {
 bool InviteMessageSenderIterator(const void* item, void* udata) {
   const UserEntry* ue = item;
   InviteMessage* message = udata;
-  UserEntry* foundUser = NULL;
-  if(GetUser(message->invitedList, message->usernameSrc, foundUser) || GetUser(message->inRoomList,message->usernameSrc,foundUser))
-      sendMessage(message->message, ue->user->clientFD);
+  sendMessage(message->message, ue->user->clientFD);
   return true;
 }
 
 bool InviteToRoom(UserList* globalUsers, RoomsList* globalRooms, cJSON* usernames, char* roomname, char* usernameSrc, int clientFD) {
     // 1. Buscar que la sala exista.
     // 2. Buscar que todos los usuarios existan.
-    RoomEntry* foundRoom = NULL;
-    if(!GetRoom(globalRooms, roomname, foundRoom)) {
+    RoomEntry foundRoom = {0};
+    if(!GetRoom(globalRooms, roomname, &foundRoom)) {
         printf("[SERVER]: No se encotró la habitación %s.\n",roomname);
         cJSON* disconnectJSON = cJSON_CreateObject();
         if(disconnectJSON == NULL) {
@@ -155,26 +185,16 @@ bool InviteToRoom(UserList* globalUsers, RoomsList* globalRooms, cJSON* username
         return false;
     }
     // Checar si usuario pertenece a la sala.
-    UserEntry* foundUser = NULL;
-    if(!GetUser(foundRoom->roomUsers, usernameSrc, foundUser)) {
+    UserEntry foundUser = {0};
+    if(!GetUser(foundRoom.roomUsers, usernameSrc, &foundUser)) {
         printf("[SERVER]: Usuario que no está en sala quiere invitar a más usuarios.\n");
         return false;
     }
     // Lista de invitaciones puede ser no vacía.
-    UserList* roomUserInviteList = foundRoom->roomUsers;
-    bool createdUserList = false;
-    if(roomUserInviteList == NULL) {
-        UserList* roomUserInviteList = malloc(sizeof(UserList));
-        if(roomUserInviteList == NULL) {
-            printf("[SERVER]: Error en reservación de memoria para lista de usuarios en sala\n");
-            return false;
-        }
-        if(!InitUserList(roomUserInviteList)){
-            printf("[SERVER]: Error en inicialización de lista de usuarios en sala.\n");
-            free(roomUserInviteList);
-            return false;
-        }
-        createdUserList = true;
+    UserList* roomUserInviteList = foundRoom.invitedUsers;
+    if(roomUserInviteList == NULL){
+        printf("[SERVER]: La sala %s no tiene lista de usuarios inicializada.\n",roomname);
+        return false;
     }
     cJSON* username = NULL;
     cJSON_ArrayForEach(username, usernames) {
@@ -185,8 +205,6 @@ bool InviteToRoom(UserList* globalUsers, RoomsList* globalRooms, cJSON* username
                 cJSON* disconnectJSON = cJSON_CreateObject();
                 if(disconnectJSON == NULL) {
                     printf("[SERVER]: Error al mandar respuesta de usuario inexistente.\n");
-                    DestroyUserList(roomUserInviteList);
-                    free(roomUserInviteList);
                     return false;
                 }
                 cJSON_AddStringToObject(disconnectJSON, "type", "RESPONSE");
@@ -197,16 +215,12 @@ bool InviteToRoom(UserList* globalUsers, RoomsList* globalRooms, cJSON* username
                 sendMessage(disconnectJSONString, clientFD);
                 free(disconnectJSONString);
                 cJSON_Delete(disconnectJSON);
-                DestroyUserList(roomUserInviteList);
-                free(roomUserInviteList);
                 return true;
             } else {
-                AddUser(roomUserInviteList, foundUser.username, foundUser.user->status, foundUser.user->clientFD);
+                AddUserRef(roomUserInviteList, foundUser.username, foundUser.user);
             }
         } else {
             printf("[SERVER]: usernames en JSON recibido contiene un objeto que no es String.\n");
-            DestroyUserList(roomUserInviteList);
-            free(roomUserInviteList);
             return false;
         }
     }
@@ -217,20 +231,28 @@ bool InviteToRoom(UserList* globalUsers, RoomsList* globalRooms, cJSON* username
     cJSON_AddStringToObject(publicTextJSON, "username", usernameSrc);
     cJSON_AddStringToObject(publicTextJSON, "roomname", roomname);
     char* publicTextJSONString = cJSON_PrintUnformatted(publicTextJSON);
-    InviteMessage messageForOtherUsers = {.clientFDSource = clientFD, .message = publicTextJSONString, .invitedList = roomUserInviteList, .inRoomList = foundRoom->roomUsers, .usernameSrc = usernameSrc};
+    InviteMessage messageForOtherUsers = {.clientFDSource = clientFD, .message = publicTextJSONString, .invitedList = roomUserInviteList, .inRoomList = foundRoom.roomUsers, .usernameSrc = usernameSrc};
     pthread_mutex_lock(&roomUserInviteList->mutexLock);
     hashmap_scan(roomUserInviteList->userList, InviteMessageSenderIterator, &messageForOtherUsers);
-    if(createdUserList)
-        foundRoom->invitedUsers = roomUserInviteList; 
     pthread_mutex_unlock(&roomUserInviteList->mutexLock);
     free(publicTextJSONString);
     cJSON_Delete(publicTextJSON);
     return true;
 }
 
+bool SendRawText(char* buffer, UserList* list, int clientFD) {
+  if(buffer == NULL || list == NULL || list->userList == NULL)
+    return false;
+  Message messageForOtherUsers = {.clientFDSource = clientFD, .message = buffer };
+  pthread_mutex_lock(&list->mutexLock);
+  hashmap_scan(list->userList, MessageSenderIterator, &messageForOtherUsers);
+  pthread_mutex_unlock(&list->mutexLock);
+  return true;
+}
+
 bool JoinRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int clientFD) {
-    RoomEntry* foundRoom = NULL;
-    if(!GetRoom(globalRooms, roomname, foundRoom)) {
+    RoomEntry foundRoom = {0};
+    if(!GetRoom(globalRooms, roomname, &foundRoom)) {
         printf("[SERVER]: No se encontró la habitación %s.\n",roomname);
         cJSON* notFoundJSON = cJSON_CreateObject();
         if(notFoundJSON == NULL) {
@@ -247,9 +269,9 @@ bool JoinRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int cli
         cJSON_Delete(notFoundJSON);
         return false;
     }
-    UserList* invitedUsers = foundRoom->invitedUsers;
-    UserEntry* foundUser = NULL;
-    if(!GetUser(invitedUsers, usernameSrc, foundUser)) {
+    UserList* invitedUsers = foundRoom.invitedUsers;
+    UserEntry foundUser = {0};
+    if(!GetUser(invitedUsers, usernameSrc, &foundUser)) {
         printf("[SERVER]: Usuario no fue invitado a la habitación %s y desea unirse.\n",roomname);
         cJSON* notInvitedJSON = cJSON_CreateObject();
         if(notInvitedJSON == NULL) {
@@ -266,8 +288,13 @@ bool JoinRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int cli
         cJSON_Delete(notInvitedJSON);
         return false;
     }
-    if(!AddUser(foundRoom->roomUsers, foundUser->username, foundUser->user->status, foundUser->user->clientFD)) {
+    if(!AddUserRef(foundRoom.roomUsers, foundUser.username, foundUser.user)) {
         printf("[SERVER]: Error aceptando invitación. \n");
+        return false;
+    }
+
+    if(!DeleteUser(invitedUsers, foundUser.username)) {
+        printf("[SERVER]: Error sacando usuario de lista de invitados al unir usuario.\n");
         return false;
     }
     cJSON* successJSON = cJSON_CreateObject();
@@ -283,8 +310,6 @@ bool JoinRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int cli
     sendMessage(successJSONString, clientFD);
     free(successJSONString);
     cJSON_Delete(successJSON);
-
-    // Mandar respuesta a usuarios de sala.
     
     cJSON* publicTextJSON = cJSON_CreateObject();
     if(publicTextJSON == NULL)
@@ -293,11 +318,198 @@ bool JoinRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int cli
     cJSON_AddStringToObject(publicTextJSON, "roomname", roomname);
     cJSON_AddStringToObject(publicTextJSON, "username", usernameSrc);
     char* publicTextJSONString = cJSON_PrintUnformatted(publicTextJSON);
-    Message messageForOtherUsers = {.clientFDSource = clientFD, .message = publicTextJSONString };
-    pthread_mutex_lock(&foundRoom->roomUsers->mutexLock);
-    hashmap_scan(foundRoom->roomUsers->userList, MessageSenderIterator, &messageForOtherUsers);
-    pthread_mutex_unlock(&foundRoom->roomUsers->mutexLock);
+    SendRawText(publicTextJSONString, foundRoom.roomUsers, clientFD);
     free(publicTextJSONString);
     cJSON_Delete(publicTextJSON);
     return true;
+}
+
+char* GenerateRoomUserListJSON(UserList* list,char* roomname) {
+  cJSON* completeJSON = cJSON_CreateObject();
+  cJSON* userJSON = cJSON_CreateObject();
+  if(completeJSON == NULL || userJSON == NULL){
+    cJSON_Delete(completeJSON);
+    cJSON_Delete(userJSON);
+    return NULL;
+  }
+  cJSON_AddStringToObject(completeJSON, "type", "ROOM_USER_LIST");
+  cJSON_AddStringToObject(completeJSON, "roomname", roomname);
+  pthread_mutex_lock(&list->mutexLock);
+  hashmap_scan(list->userList, UserToJSONIterator, userJSON);
+  pthread_mutex_unlock(&list->mutexLock);
+  cJSON_AddItemToObject(completeJSON, "users", userJSON);
+  char* printedJSON = cJSON_PrintUnformatted(completeJSON);
+  cJSON_Delete(completeJSON);
+  return printedJSON;
+}
+
+bool GetRoomUsers(RoomsList* globalRooms, char* roomname, char* usernameSrc, int clientFD) {
+    RoomEntry foundRoom = {0};
+    if(!GetRoom(globalRooms, roomname, &foundRoom)) {
+        printf("[SERVER]: No se encontró la habitación solicitada.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "ROOM_USERS");
+        cJSON_AddStringToObject(failJSON, "result", "NO_SUCH_ROOM");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return true;
+    }
+    UserList* roomUsers = foundRoom.roomUsers;
+    if(roomUsers == NULL) {
+        printf("[SERVER]: No hay usuarios en habitación.\n");
+    }
+    UserEntry foundUser = {0};
+    if(!GetUser(roomUsers, usernameSrc, &foundUser)) {
+        printf("[SERVER]: Usuario no pertenece a habitación.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "ROOM_USERS");
+        cJSON_AddStringToObject(failJSON, "result", "NOT_JOINED");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return false;
+    }
+    char* roomUserListJSON = GenerateRoomUserListJSON(roomUsers, roomname);
+    sendMessage(roomUserListJSON, clientFD);
+    free(roomUserListJSON);
+    return true;
+} 
+
+bool SendRoomText(char* buffer, RoomsList* globalRooms, char* roomname, char* username, int clientFD) {
+    RoomEntry foundRoom = {0};
+    if(!GetRoom(globalRooms, roomname, &foundRoom)) {
+        printf("[SERVER]: No se encontró la habitación solicitada.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "ROOM_TEXT");
+        cJSON_AddStringToObject(failJSON, "result", "NO_SUCH_ROOM");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return false;
+    }
+    UserList* roomUsers = foundRoom.roomUsers;
+    if(roomUsers == NULL) {
+        printf("[SERVER]: No hay usuarios en habitación.\n");
+    }
+    UserEntry foundUser = {0};
+    if(!GetUser(roomUsers, username, &foundUser)) {
+        printf("[SERVER]: Usuario no pertenece a habitación.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "ROOM_TEXT");
+        cJSON_AddStringToObject(failJSON, "result", "NOT_JOINED");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return false;
+    }
+    cJSON* textJSON = cJSON_CreateObject();
+    if(textJSON == NULL)
+        return false;
+    cJSON_AddStringToObject(textJSON, "type", "ROOM_TEXT_FROM");
+    cJSON_AddStringToObject(textJSON, "roomname", roomname);
+    cJSON_AddStringToObject(textJSON, "username", username);
+    cJSON_AddStringToObject(textJSON, "message", buffer);
+    char* textJSONString = cJSON_PrintUnformatted(textJSON);
+    if(!SendRawText(textJSONString, roomUsers, clientFD)) {
+        printf("[SERVER]: Error al mandar mensaje en habitación.\n");
+        return false;
+    }
+    free(textJSONString);
+    cJSON_Delete(textJSON);
+    return true;
+}
+
+bool LeaveRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int clientFD) {
+    RoomEntry foundRoom = {0};
+    if(!GetRoom(globalRooms, roomname, &foundRoom)) {
+        printf("[SERVER]: No se encontró la habitación solicitada.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "LEAVE_ROOM");
+        cJSON_AddStringToObject(failJSON, "result", "NO_SUCH_ROOM");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return false;
+    }
+    UserList* roomUsers = foundRoom.roomUsers;
+    if(roomUsers == NULL) {
+        printf("[SERVER]: No hay usuarios en habitación.\n");
+    }
+    UserEntry foundUser = {0};
+    if(!GetUser(roomUsers, usernameSrc, &foundUser)) {
+        printf("[SERVER]: Usuario no pertenece a habitación.\n");
+        cJSON* failJSON = cJSON_CreateObject();
+        if(failJSON == NULL)
+            return false;
+        cJSON_AddStringToObject(failJSON, "type", "RESPONSE");
+        cJSON_AddStringToObject(failJSON, "operation", "LEAVE_ROOM");
+        cJSON_AddStringToObject(failJSON, "result", "NOT_JOINED");
+        cJSON_AddStringToObject(failJSON, "extra", roomname);
+        char* failJSONString = cJSON_PrintUnformatted(failJSON);
+        sendMessage(failJSONString, clientFD);
+        free(failJSONString);
+        cJSON_Delete(failJSON);
+        return false;
+    }
+    cJSON* leaveJSON = cJSON_CreateObject();
+    if(leaveJSON == NULL)
+        return false;
+    cJSON_AddStringToObject(leaveJSON, "type", "LEFT_ROOM");
+    cJSON_AddStringToObject(leaveJSON, "roomname", roomname);
+    cJSON_AddStringToObject(leaveJSON, "username", usernameSrc);
+    char* leaveJSONString = cJSON_PrintUnformatted(leaveJSON);
+    if(!SendRawText(leaveJSONString, roomUsers, clientFD)) {
+        printf("[SERVER]: Error al mandar mensaje en habitación.\n");
+        return false;
+    }
+    free(leaveJSONString);
+    cJSON_Delete(leaveJSON);
+    if(!DeleteUser(roomUsers, usernameSrc)) {
+        printf("[SERVER]: Error al desconectar usuario de habitación.\n");
+    }
+    return true;
+}
+
+bool DeleteRoomUserIterator(const void* item, void* udata) {
+  const RoomEntry* re = item;
+  const RoomDeleterAdapter* adapter = udata;
+  UserEntry foundUser = {0};
+  if(GetUser(re->roomUsers, adapter->username, &foundUser)) {
+      if(!DeleteUser(re->roomUsers, adapter->username)) {
+          printf("[SERVER]: Error eliminando usuario de sala %s por desconexión.\n",re->roomname);
+      }
+  }
+  if(UserListIsEmpty(re->roomUsers) && UserListIsEmpty(re->invitedUsers)) {
+      if(!DeleteRoom(adapter->globalList, re->roomname)) {
+          printf("[SERVER]: Sala sin usuarios no pudo ser eliminada.\n");
+      }
+  }
+      
+  return true;
 }

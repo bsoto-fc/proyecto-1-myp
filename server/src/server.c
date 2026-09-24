@@ -97,14 +97,14 @@ void* receiveAndSendResponse(void* data) {
               authenticated = true;
       } else if(!determineJSONResponse(buffer, &userList, info->socketFD,user.username, &globalRoomsList)) {
           printf("[SERVER]: Error al procesar petición del usuario %s\n",user.username);
-          DisconnectUser(&userList, user.username, info->socketFD);
+          DisconnectUser(&userList, &globalRoomsList, user.username, info->socketFD);
           authenticated = false;
           receiving = false;
       }
     }
     if(amountReceived == 0) {
         if(!strcmp(user.username, "") == 0) {
-          DisconnectUser(&userList, user.username, info->socketFD);
+          DisconnectUser(&userList, &globalRoomsList, user.username, info->socketFD);
           authenticated = false;
           receiving = false;
         } else {
