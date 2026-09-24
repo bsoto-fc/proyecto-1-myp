@@ -10,7 +10,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 @Composable
 fun Chat(
@@ -18,18 +22,26 @@ fun Chat(
     port: Int,
     username: String,
     messages: List<String>,
-    onSend: (String) -> Unit,
+    users: Map<String,String>,
+    onSend: (text: String, toUser: String?) -> Unit,
     onLeave: () -> Unit
 ) {
     var msgToSend by remember { mutableStateOf("") }
-    
+    var selectedUser by remember { mutableStateOf<String?>(null) }
+
     MaterialTheme {
         Scaffold(
             topBar = {
+                // https://developer.android.com/develop/ui/compose/components/app-bars
                 TopAppBar(
                     title = { Text("Chat — $username@$ip:$port") },
-                    actions = {
-                        TextButton(onClick = onLeave) { Text("Salir") }
+                    navigationIcon = {
+                        IconButton(onClick = onLeave) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Salir"
+                            )
+                        }
                     }
                 )
             }
@@ -40,15 +52,82 @@ fun Chat(
                     .padding(paddingValues)
                     .padding(8.dp)
             ){
-                LazyColumn(
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ){
-                    items(messages){ msg ->
-                        Text(msg, modifier = Modifier.padding(vertical = 2.dp))
+                        .weight(2f)
+                        .fillMaxHeight()
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(2f)
+                            .fillMaxWidth()
+                    ){
+                        items(messages){ msg ->
+                                  Text(msg, modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(0.5f)
+                            .fillMaxWidth()
+                    ){
+                        items(users.entries.toList()){ (usr,status) ->
+                            val isSelected = usr == selectedUser
+                            when(status) {
+                                "AWAY" -> Text(usr,
+                                               modifier = Modifier
+                                                   .clickable {
+                                                       selectedUser = if(isSelected) null else usr
+                                                   }
+                                                   .background(
+                                                       if(isSelected)
+                                                           MaterialTheme.colors.primary.copy(alpha = 0.2f)
+                                                       else
+                                                           Color.Transparent
+                                                   )
+                                                   .padding(vertical = 2.dp),
+                                               color = Color.Yellow
+                                          )
+                                "BUSY" -> Text(usr,
+                                               modifier = Modifier
+                                                   .clickable {
+                                                       selectedUser = if(isSelected) null else usr
+                                                   }
+                                                   .background(
+                                                       if(isSelected)
+                                                           MaterialTheme.colors.primary.copy(alpha = 0.2f)
+                                                       else
+                                                           Color.Transparent
+                                                   )
+                                                   .padding(vertical = 2.dp),
+                                               color = Color.Red
+                                          )
+                                "ACTIVE" -> Text(usr,
+                                               modifier = Modifier
+                                                   .clickable {
+                                                       selectedUser = if(isSelected) null else usr
+                                                   }
+                                                   .background(
+                                                       if(isSelected)
+                                                           MaterialTheme.colors.primary.copy(alpha = 0.2f)
+                                                       else
+                                                           Color.Transparent
+                                                   )
+                                                   .padding(vertical = 2.dp),
+                                               color = Color.Green
+                                          )
+                            }
+                        }
                     }
                 }
+
+                if(selectedUser != null){
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Privado para $selectedUser", modifier = Modifier.weight(1f))
+                        TextButton(onClick = { selectedUser = null }) { Text("Cancelar") }
+                    }
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -59,13 +138,13 @@ fun Chat(
                         value = msgToSend,
                         onValueChange = { msgToSend = it },
                         modifier = Modifier.weight(1f),
-                        label = { Text("Mensaje") },
+                        label = { Text(if(selectedUser!=null) "Mensaje privado para $selectedUser" else "Mensaje público") },
                         singleLine = true
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                                if (msgToSend.isNotBlank()) {
-                                   onSend(msgToSend)
+                                   onSend(msgToSend,selectedUser)
                                    msgToSend = ""
                                }
                            }) {

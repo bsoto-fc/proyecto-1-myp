@@ -108,6 +108,7 @@ class SocketClient(
                         onDisconnected("Error al enviar mensaje.")
                     }
                 }
+                println("[CLIENT]: Se envió $message")
             } catch (e: IOException){
                 withContext(Dispatchers.Main){
                     onDisconnected("Error al enviar mensaje: ${e.message}")

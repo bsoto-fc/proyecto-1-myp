@@ -36,9 +36,13 @@ fun screenManager() {
     var currentUsername by remember { mutableStateOf("") }
     var connectionError by remember { mutableStateOf("") }
 
-    val messages = remember { mutableStateListOf<String>() }
+    var messages = remember { mutableStateListOf<String>() }
+    var users = remember { mutableStateMapOf<String,String>() }
     var client by remember { mutableStateOf<SocketClient?>(null) }
 
+    var privateConvo = remember { mutableStateMapOf<String,MutableList<String>>() }
+    var roomConvo = remember { mutableStateMapOf<String,MutableList<String>>() }
+    
     DisposableEffect(client) {
         val activeClient = client
         onDispose { activeClient?.close() }
@@ -61,9 +65,8 @@ fun screenManager() {
                             currentScreen = Screens.Chat
                         },
                         onMessageReceived = { message->
-                            // runCatching: Corre código y regresa Result, éxito o una excepción. getOrNull() regresa null si hubo excepcion.
                             val incoming = runCatching {json.decodeFromString<Message>(message)}.getOrNull()
-                            messages.add(incoming?.text ?: message)
+                            determineActionFromJSON(messageJSON = incoming, users = users, messages = messages)
                         },
                         onDisconnected = { error ->
                             connectionError = error
@@ -71,31 +74,42 @@ fun screenManager() {
                             currentScreen = Screens.Connection
                         }
                     ).also { it.connect() }
-                    /* .also: versión de Kotlin de algo que en java sería:
-                     SocketClient c = new SocketClient();
-                     c.connect();
-                     client = c;
-                     */
                 }
             )
         }
         Screens.Chat -> {
+            LaunchedEffect(client) {
+                client?.send(getFetchUserListRequest())
+            }
             Chat(
                 ip = connectedIp,
                 port = connectedPort,
                 username = currentUsername,
                 messages = messages,
-                onSend = {text->
-                    val jsonRequest = json.encodeToString(Message(type = "PUBLIC_TEXT",text = text))
+                users = users,
+                onSend = {text, toUser ->
+                    val jsonRequest: String
+                    if(toUser != null){
+                        jsonRequest = json.encodeToString(Message(type = "TEXT",text = text, username = toUser))
+                        var privateConvoMessages = privateConvo.get(toUser)
+                        if(privateConvoMessages == null) {
+                            privateConvoMessages = mutableListOf("$currentUsername: $text")
+                            privateConvo.put(toUser,privateConvoMessages)
+                        } else {
+                            privateConvoMessages.add("$currentUsername: $text")
+                        }
+                    } else {
+                        jsonRequest = json.encodeToString(Message(type = "PUBLIC_TEXT",text = text))
+                        messages.add("$currentUsername: $text")
+                    }
                     client?.send(jsonRequest)
                 },
                 onLeave = {
+                    client?.send(getDisconnectRequest())
                     client = null
                     currentScreen = Screens.Connection
                 }
             )
         }
     }
-    
 }  
-

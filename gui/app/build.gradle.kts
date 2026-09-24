@@ -35,6 +35,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
+    implementation("org.jetbrains.compose.material:material-icons-core:1.7.3")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
