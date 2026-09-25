@@ -83,6 +83,7 @@ class SocketClient(
         try {
             while (isConnected) {
                 val line = reader?.readLine() ?: break
+                println("[CLIENT]: Se recibió $line")
                 withContext(Dispatchers.Main) { onMessageReceived(line) }
             }
             withContext(Dispatchers.Main) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 
 import mx.unam.ciencias.myp.messages.*
+import mx.unam.ciencias.myp.messages.Invitation
 import mx.unam.ciencias.myp.sockets.SocketClient
 
 fun main() = application {
@@ -42,7 +43,13 @@ fun screenManager() {
 
     var privateConvo = remember { mutableStateMapOf<String,MutableList<String>>() }
     var roomConvo = remember { mutableStateMapOf<String,MutableList<String>>() }
+
+    var roomCreationStatus by remember { mutableStateOf<RoomCreationStatus>(RoomCreationStatus.Idle) }
     
+    var currentRoomUsers = remember { mutableStateMapOf<String,String>() }
+
+    var pendingInvitations = remember { mutableStateListOf<Invitation>() }
+
     DisposableEffect(client) {
         val activeClient = client
         onDispose { activeClient?.close() }
@@ -66,11 +73,26 @@ fun screenManager() {
                         },
                         onMessageReceived = { message->
                             val incoming = runCatching {json.decodeFromString<Message>(message)}.getOrNull()
-                            determineActionFromJSON(messageJSON = incoming, users = users, messages = messages)
+                            determineActionFromJSON(
+                                messageJSON = incoming,
+                                users = users,
+                                messages = messages,
+                                privateConvos = privateConvo,
+                                roomConvos = roomConvo,
+                                onRoomStatusChange = { status-> roomCreationStatus = status },
+                                roomUsers = currentRoomUsers,
+                                pendingInvitations = pendingInvitations
+                            )
                         },
                         onDisconnected = { error ->
                             connectionError = error
                             client = null
+                            messages.clear()
+                            users.clear()
+                            privateConvo.clear()
+                            roomConvo.clear()
+                            currentRoomUsers.clear()
+                            pendingInvitations.clear()
                             currentScreen = Screens.Connection
                         }
                     ).also { it.connect() }
@@ -87,17 +109,20 @@ fun screenManager() {
                 username = currentUsername,
                 messages = messages,
                 users = users,
-                onSend = {text, toUser ->
+                privateConvos = privateConvo,
+                roomConvos = roomConvo,
+                onSend = {text, toUser, toRoom ->
                     val jsonRequest: String
                     if(toUser != null){
                         jsonRequest = json.encodeToString(Message(type = "TEXT",text = text, username = toUser))
-                        var privateConvoMessages = privateConvo.get(toUser)
-                        if(privateConvoMessages == null) {
-                            privateConvoMessages = mutableListOf("$currentUsername: $text")
-                            privateConvo.put(toUser,privateConvoMessages)
-                        } else {
-                            privateConvoMessages.add("$currentUsername: $text")
-                        }
+                        val updatedMessages = privateConvo.get(toUser)?.toMutableList() ?: mutableListOf()
+                        updatedMessages.add("$currentUsername: $text")
+                        privateConvo.put(toUser,updatedMessages)
+                    } else if(toRoom != null){
+                        jsonRequest = json.encodeToString(Message(type = "ROOM_TEXT", roomname = toRoom, text = text))
+                        val updatedMessages = roomConvo.get(toRoom)?.toMutableList() ?: mutableListOf()
+                        updatedMessages.add("$currentUsername: $text")
+                        roomConvo.put(toRoom,updatedMessages)
                     } else {
                         jsonRequest = json.encodeToString(Message(type = "PUBLIC_TEXT",text = text))
                         messages.add("$currentUsername: $text")
@@ -107,7 +132,41 @@ fun screenManager() {
                 onLeave = {
                     client?.send(getDisconnectRequest())
                     client = null
+                    messages.clear()
+                    users.clear()
+                    privateConvo.clear()
+                    roomConvo.clear()
+                    currentRoomUsers.clear()
+                    pendingInvitations.clear()
                     currentScreen = Screens.Connection
+                },
+                roomCreationStatus = roomCreationStatus,
+                onNewRoom = { roomname ->
+                    roomCreationStatus = RoomCreationStatus.Pending(roomname)
+                    val jsonRequest = json.encodeToString(Message(type = "NEW_ROOM", roomname = roomname))
+                    client?.send(jsonRequest)
+                },
+                onRoomInvite = { roomname, usersToInvite ->
+                    val jsonRequest = json.encodeToString(Message(type = "INVITE", roomname = roomname, usernames = usersToInvite))
+                    client?.send(jsonRequest)
+                },
+                roomUsers = currentRoomUsers,
+                onRoomUsersRequest = {roomname ->
+                    client?.send(getFetchRoomUserListRequest(roomname))
+                } ,
+                pendingInvitations = pendingInvitations,
+                onAcceptInvitation = { roomname ->
+                    client?.send(getJoinRoomRequest(roomname))
+                },
+                onDeclineInvitation = { invitation ->
+                    // El protocolo no tiene un mensaje de rechazar invitación, pero se descarta localmente.
+                    pendingInvitations.remove(invitation)
+                },
+                onLeaveRoom = { roomname ->
+                    client?.send(getLeaveRoomRequest(roomname))
+                    // Se retira la sala localmente de forma optimista.
+                    roomConvo.remove(roomname)
+                    currentRoomUsers.clear()
                 }
             )
         }

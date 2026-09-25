@@ -90,7 +90,7 @@ bool AddRoom(UserList* list, RoomsList* roomsList, char* roomname, char* usernam
         cJSON_Delete(errorJSON);
         sendMessage(printedJSON, srcClientFD);
         free(printedJSON);
-        return false;
+        return true;
     }
     pthread_mutex_lock(&roomsList->mutexLock);
     // TO DO: Hacer el siguiente código más seguro.
@@ -429,7 +429,7 @@ bool SendRoomText(char* buffer, RoomsList* globalRooms, char* roomname, char* us
     cJSON_AddStringToObject(textJSON, "type", "ROOM_TEXT_FROM");
     cJSON_AddStringToObject(textJSON, "roomname", roomname);
     cJSON_AddStringToObject(textJSON, "username", username);
-    cJSON_AddStringToObject(textJSON, "message", buffer);
+    cJSON_AddStringToObject(textJSON, "text", buffer);
     char* textJSONString = cJSON_PrintUnformatted(textJSON);
     if(!SendRawText(textJSONString, roomUsers, clientFD)) {
         printf("[SERVER]: Error al mandar mensaje en habitación.\n");
@@ -493,6 +493,12 @@ bool LeaveRoom(RoomsList* globalRooms, char* roomname, char* usernameSrc, int cl
     if(!DeleteUser(roomUsers, usernameSrc)) {
         printf("[SERVER]: Error al desconectar usuario de habitación.\n");
     }
+    if(UserListIsEmpty(roomUsers) && UserListIsEmpty(foundRoom.invitedUsers)) {
+        if(!DeleteRoom(globalRooms, foundRoom.roomname)) {
+            printf("[SERVER]: Sala sin usuarios no pudo ser eliminada.\n");
+        }
+    }
+
     return true;
 }
 

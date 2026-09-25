@@ -53,5 +53,6 @@ void sendMessage(char* buffer, int socketFD){
   bufferWithNewLine[bufferSize] = '\n';
   bufferWithNewLine[bufferSize + 1] = '\0';
   send(socketFD, bufferWithNewLine, strlen(bufferWithNewLine), 0);
+  printf("[SERVER]: Se envió %s",bufferWithNewLine);
   free(bufferWithNewLine);
 }

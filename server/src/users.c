@@ -426,7 +426,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
     return false;
   char value[20] = {0};
   if(!parseJSONValue(json,"type",value,sizeof(value))) {
-      goto invalid;
+      goto invalid_noclean;
   }
   if(strcmp(value, "IDENTIFY") == 0) {
       printf("[SERVER]: Usuario ya autenticado quiere autenticarse de nuevo. \n");
@@ -434,7 +434,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
   } else if (strcmp(value, "STATUS") == 0) {
       char statusMessage[10];
       if(!parseJSONValue(json,"status",statusMessage,sizeof(statusMessage))) {
-          goto invalid;
+          goto invalid_noclean;
       }
       int status = StatusStringToStatusInt(statusMessage);
       if(status == -1) {
@@ -452,17 +452,17 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char message[1024];
       char usernameDest[USERNAME_MAX];
       if(!parseJSONValue(json,"text",message,sizeof(message)) || !parseJSONValue(json,"username",usernameDest,sizeof(usernameDest)))
-          goto invalid;
+          goto invalid_noclean;
       SendPrivateText(message, list, usernameSrc, usernameDest);
   } else if (strcmp(value, "PUBLIC_TEXT") == 0) {
       char message[1024];
       if(!parseJSONValue(json,"text",message,sizeof(message)))
-          goto invalid;
+          goto invalid_noclean;
       SendPublicText(message, list,usernameSrc,clientFD);
   } else if (strcmp(value, "NEW_ROOM") == 0) {
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname)))
-          goto invalid;
+          goto invalid_noclean;
       if(!AddRoom(list, roomsList, roomname, usernameSrc, clientFD)) {
           printf("[SERVER]: Error creando habitación.\n");
           goto error;
@@ -471,7 +471,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
           printf("[SERVER]: Nombre de habitación inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       cJSON* usernames = cJSON_GetObjectItemCaseSensitive(json, "usernames");
       if(!cJSON_IsArray(usernames)) {
@@ -485,7 +485,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
           printf("[SERVER]: Nombre de habitación inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       if(!JoinRoom(roomsList, roomname, usernameSrc, clientFD))
           goto error;
@@ -493,7 +493,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
           printf("[SERVER]: Nombre de habitación inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       if(!GetRoomUsers(roomsList, roomname, usernameSrc, clientFD)) {
           goto error;
@@ -502,12 +502,12 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
           printf("[SERVER]: Nombre de habitación inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       char message[1024];
       if(!parseJSONValue(json,"text",message,sizeof(message))) {
           printf("[SERVER]: Mensaje inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       if(!SendRoomText(message, roomsList, roomname, usernameSrc, clientFD))
           goto error;
@@ -515,7 +515,7 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
       char roomname[ROOMNAME_MAX];
       if(!parseJSONValue(json,"roomname",roomname,sizeof(roomname))) {
           printf("[SERVER]: Nombre de habitación inválido.\n");
-          goto invalid;
+          goto invalid_noclean;
       }
       if(!LeaveRoom(roomsList, roomname, usernameSrc, clientFD))
           goto error;
@@ -539,6 +539,17 @@ bool determineJSONResponse(char* buffer, UserList* list, int clientFD, char* use
   free(invalidString);
   cJSON_Delete(invalidJSON);
   cJSON_Delete(json);
+  return false;
+  }
+  invalid_noclean: {
+  cJSON* invalidJSON = cJSON_CreateObject();
+  cJSON_AddStringToObject(invalidJSON, "type", "RESPONSE");
+  cJSON_AddStringToObject(invalidJSON, "operation", "INVALID");
+  cJSON_AddStringToObject(invalidJSON, "result", "INVALID");
+  char* invalidString = cJSON_PrintUnformatted(invalidJSON);
+  sendMessage(invalidString,clientFD);
+  free(invalidString);
+  cJSON_Delete(invalidJSON);
   return false;
   }
 }
