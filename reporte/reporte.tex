@@ -1,0 +1,81 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage[left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{minted}
+
+\title{Reporte proyecto 1}
+\author{Bruno Bernardo Soto Lugo}
+\date{\today}
+
+\begin{document}
+
+\thispagestyle{empty}
+
+\begin{figure}[ht]
+  \minipage{0.76\textwidth}
+  \includegraphics[width=4cm]{logo_unam.png}
+  \label{EscudoUNAM}
+  \endminipage
+  \minipage{0.32\textwidth}
+  \includegraphics[height=4.9cm, width=4cm]{logo_ciencias.png}
+  \label{EscudoFC}
+  \endminipage
+\end{figure}
+
+\begin{center}
+	\vspace{0.8cm}
+	\LARGE
+	UNIVERSIDAD NACIONAL AUTÓNOMA DE MÉXICO
+  
+	\vspace{0.8cm}
+	\LARGE
+  FACULTAD DE CIENCIAS
+  
+	\vspace{1.7cm}
+	\Large
+	\textbf{Reporte proyecto 1 (Implementación de protocolo de chat utilizando sockets TCP).}
+  
+	\vspace{1.3cm}
+	\normalsize
+	PRESENTA \\
+	\vspace{.3cm}
+	\large
+	\textbf{Bruno Bernardo Soto Lugo \\ 426008646}
+  
+	\vspace{1.3cm}
+	\normalsize
+	PROFESOR \\
+	\vspace{.3cm}
+	\large
+	\textbf{Canek Peláez Valdés} \\
+
+	\vspace{1.3cm}
+	\normalsize
+	AYUDANTES \\
+	\vspace{.3cm}
+	\large
+	\textbf{Miriam Torres Bucio} \\
+	\textbf{Cynthia Lizbeth Sánchez Urbano} \\
+  
+\end{center}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\chapter{Introducción}
+El presente documento detalla el proceso de creación de implementación de un protocolo que especifica una forma de comunicación chat. El sistema está compuesto por dos componentes principales: un cliente con interfaz gráfica desarrollado en \textbf{Kotlin} con el framework \textbf{Compose Multiplatform} y un servidor desarrollado en lenguaje \textbf{C}. 
+
+El objetivo principal del proyecto es implementar un protocolo de comunicación basado en objetos JSON que permita la identificación de usuarios, cambio de estados (Activo, Ausente, Ocupado), envío de mensajes privados y públicos, así como la gestión de salas de chat dinámicas. El desarrollo siguió el modelo de cascada.
+
+
+\end{document}
