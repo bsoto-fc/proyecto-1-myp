@@ -73,7 +73,7 @@
 \newpage
 
 \chapter{Introducción}
-El presente documento detalla el proceso de implementación de un protocolo que especifica una forma de comunicación chat. El sistema está compuesto por dos componentes principales: un cliente con interfaz gráfica desarrollado en \textbf{Kotlin} con el framework \textbf{Compose Multiplatform} y un servidor desarrollado en lenguaje \textbf{C}. 
+El presente documento detalla el proceso de implementación de un protocolo que especifica una forma de comunicación chat. El sistema está compuesto por dos componentes principales: un cliente con interfaz gráfica desarrollado en \textbf{Kotlin} con el framework \textbf{Compose Multiplatform} y un servidor desarrollado en lenguaje \textbf{C} con conexión red usando sockets TCP/IP. 
 
 El objetivo principal del proyecto es implementar un protocolo de comunicación basado en objetos JSON que permita la identificación de usuarios, cambio de estados (Activo, Ausente, Ocupado), envío de mensajes privados y públicos, así como la gestión de salas de chat dinámicas. El desarrollo siguió el modelo de cascada.
 
@@ -114,8 +114,30 @@ A partir del análisis del protocolo, se identificaron los siguientes componente
 \chapter{Diseño}
 El diseño implementa una arquitectura dividida en cliente y servidor con el objetivo de desacoplar las partes del programa y permitir que diferentes clientes puedan conectarse a un mismo servidor. El servidor actúa como un gestionador de múltiples conexiones simultaneas. El cliente se encarga de la representación visual y la administración de la lógica local.
 
+A grandes rasgos, antes de definir cualquier proceso, se define lo siguiente:
+\begin{enumerate}
+  \item Una lista de usuarios global.
+  \item Una lista de salas global.
+  \item Algún tipo de estructura que guarde usuarios.
+  \item Algún tipo de estructura que guarde salas, una lista de miembros y una lista de usuarios invitados.
+  \item Hilos, refiriendose a una forma de realizar operaciones con concurrencia.
+\end{enumerate}
+Se definen vagamente debido a que, por ahora, solo son recursos abstractos que nos ayudarán a definir los algoritmos que necesita el protocolo. En la sección de diseño se definirán concretamente. \\
+
+Algunos procesos que se detallan en el protocolo son simples, y a continuación se detalla el proceso:
+
+\begin{enumerate}
+  \item \textbf{PUBLIC\_TEXT:} El cliente manda la petición. Se itera sobre una lista de usuarios global y a cada usuario se le manda el mensaje.
+  \item \textbf{TEXT:} El cliente manda la petición. Se busca el usuario dentro de una lista de usuarios global. Si el usuario existe, se manda el mensaje. Se regresa un error en otro caso. 
+  \item \textbf{USERS:} El cliente manda la petición. Se itera sobre una lista de usuarios global y se agrega cada usuario con su estado a un objeto JSON. Después, este objeto JSON se incluye al objeto JSON de respuesta y se regresa esta respuesta. 
+  \item \textbf{ROOM\_USERS:} El cliente manda la petición. Se verifica pertenencia a la sala especificada y se realiza la misma acción que en \textbf{USERS}, pero utilizando la lista de usuarios de la sala y no la global. 
+  \item \textbf{LEAVE\_ROOM:} El cliente manda la petición. Se verifica pertenencia y existencia de la sala. Si alguna de las dos condiciones es falsa, se regresa un error. En otro caso, se elimina al usuario de una sala de invitados y una sala de miembros asociadas a esa sala.
+\end{enumerate}
+
+Para los procesos complejos, se describirán a continuación utilizando diagramas UML.
+
 \section{Diagramas UML}
-A continuación se detallarán en diagramas UML las estructuras usadas para implementar el protocolo.
+Se detallarán en diagramas UML la lógica usada para implementar el protocolo.
 
 \subsection{Diagrama de secuencia (Proceso de autenticación)}
 El siguiente diagrama representa la secuencia que sigue el cliente y el servidor cuando un usuario busca autenticarse. 
@@ -226,6 +248,58 @@ El siguiente diagrama representa la secuencia que siguen dos clientes y el servi
   \centering
   \includegraphics[width=15cm]{Secuencia_InviteJoin.png}
   \caption{Diagrama de secuencia sobre el proceso de invitar y unirse a una sala.}
+\end{figure}
+
+\subsection{Diagrama de secuencia (Texto a sala)}
+
+El siguiente diagrama representa la secuencia que siguen el cliente y el servidor al mandar un mensaje a una sala. 
+
+%@startuml
+%actor Cliente
+%participant "Enviar mensaje a sala" as SendRoomText
+%participant "Envira respuesta" as SendJSON
+%database "Lista de salas (global)" as Rooms
+%
+%Cliente -> SendRoomText : {"type":"ROOM_TEXT","roomname":"X","text":"hola"}
+%SendRoomText -> Rooms : Obtener referencia a habitación
+%SendRoomText -> Rooms : Obtener referencia a usuario dentro de los usuarios de la sala
+%alt el usuario pertenece a la sala
+    %SendRoomText -> SendJSON : Mandar mensaje a miembros de la sala
+    %SendJSON -> SendJSON : Iterar sobre los miembros de la sala y enviar
+    %SendJSON --> "resto de la sala" : ROOM_TEXT_FROM {username, message}
+%else no pertenece
+    %SendRoomText -> Cliente : RESPONSE ROOM_TEXT NOT_JOINED
+%end
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=15cm]{Secuencia_RoomText.png}
+  \caption{Diagrama de secuencia sobre el proceso de enviar un mensaje a una sala.}
+\end{figure}
+
+\subsection{Diagrama de secuencia (Desconexión)}
+El siguiente diagrama representa la secuencia que siguen el cliente y el servidor al momento de desconectar al cliente.
+
+%@startuml
+%actor Cliente
+%participant "Desconectar usuario" as DisconnectUser
+%database "Lista de usuarios (global)" as Global
+%database "Lista de salas (global)" as Rooms
+%
+%Cliente -> DisconnectUser : {"type":"DISCONNECT"}
+%DisconnectUser -> Global : Eliminar usuario
+%DisconnectUser -> DisconnectUser : Cerrar conexión
+%DisconnectUser -> Global : Iterar sobre los usuarios globales y enviar mensaje
+%Global --> "otros usuarios" : DISCONNECTED {username}
+%DisconnectUser -> Rooms : Iterar sobre lista de salas
+%Rooms -> Rooms : por cada sala:\nBorrar usuario de lista de miembros\nBorrar usuario de lista de invitados
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=15cm]{Secuenci_Disconnect.png}
+  \caption{Diagrama de secuencia sobre el proceso de desconexión.}
 \end{figure}
 
 \chapter{Desarrollo}
