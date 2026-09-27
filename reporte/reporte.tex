@@ -149,6 +149,85 @@ El siguiente diagrama representa la secuencia que sigue el cliente y el servidor
   \caption{Diagrama de la autenticación.}
 \end{figure}
 
+\subsection{Diagrama de secuencia (Crear sala)}
+
+El siguiente diagrama representa la secuencia que sigue el cliente y el servidor cuando un usuario crea una nueva sala. 
+
+%@startuml
+%actor Cliente
+%participant "Administrador de peticiones" as Administrador
+%participant AddRoom
+%database "Lista de habitaciones (global)" as Rooms
+%database "Lista de usuarios (global)" as Users
+%
+%Cliente -> Administrador : {"type":"NEW_ROOM","roomname":"X"}
+%Administrador -> AddRoom : Añadir sala
+%AddRoom -> Rooms : Obtener sala
+%alt la sala ya existe
+    %Rooms --> AddRoom : true
+    %AddRoom -> Cliente : RESPONSE NEW_ROOM ROOM_ALREADY_EXISTS
+%else la sala no existe
+    %Rooms --> AddRoom : false
+    %AddRoom -> Users : Obtener referencia de usuario creador
+    %AddRoom -> AddRoom : Inicializar nueva sala
+    %AddRoom -> AddRoom : Añadir al creador a la nueva sala
+    %AddRoom -> Rooms : Agregar nueva sala
+    %AddRoom -> Cliente : RESPONSE NEW_ROOM SUCCESS
+%end
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=13cm]{Secuencia_NewRoom.png}
+  \caption{Diagrama de secuencia sobre la creación de una nueva habitación.}
+\end{figure}
+
+\subsection{Diagrama de secuencia (Invitar y unirse a sala)}
+
+El siguiente diagrama representa la secuencia que siguen dos clientes y el servidor en el proceso de invitar y unirse a una sala. 
+
+%@startuml
+%actor "Cliente A (anfitrión)" as A
+%actor "Cliente B (invitado)" as B
+%participant "Invitar a sala" as InviteToRoom
+%participant "Unirse a sala" as JoinRoom
+%database "Lista de habitaciones (global)" as Rooms
+%database "Lista de usuarios (global)" as Global
+%
+%A -> InviteToRoom : {"type":"INVITE","roomname":"X","usernames":["B"]}
+%InviteToRoom -> Rooms : Obtener habitación
+%InviteToRoom -> Global : Verificar si existe el usuario
+%alt Usuario no existe
+    %Global --> A : RESPONSE INVITE NO_SUCH_USER
+%else Usuario existe 
+%InviteToRoom -> Rooms : Verificar si el usuario pertenece a habitatión
+%alt Usuario ya pertenece 
+    %Rooms -> B: Ignorar
+%else Usuario no pertenece 
+%InviteToRoom -> InviteToRoom : Añadir usuario a lista de invitaciones de sala
+%InviteToRoom -> B : INVITATION {roomname:"X", username:"A"}
+%
+%B -> JoinRoom : {"type":"JOIN_ROOM","roomname":"X"}
+%JoinRoom -> Rooms : Obtener referencia a sala
+%JoinRoom -> Rooms : Obtener referencia a usuario desde lista de invitados de sala
+%alt B estaba invitado
+    %JoinRoom -> Rooms : Añadir a usuario a sala
+    %JoinRoom -> Rooms : Sacar a usuario de lista de invitados
+    %JoinRoom -> B : RESPONSE JOIN_ROOM SUCCESS
+    %JoinRoom -> A : JOINED_ROOM {roomname:"X", username:"B"}
+%else B no estaba invitado
+    %JoinRoom -> B : RESPONSE JOIN_ROOM NOT_INVITED
+%end
+%end
+%end
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=15cm]{Secuencia_InviteJoin.png}
+  \caption{Diagrama de secuencia sobre el proceso de invitar y unirse a una sala.}
+\end{figure}
+
 \chapter{Desarrollo}
 
 \end{document}
