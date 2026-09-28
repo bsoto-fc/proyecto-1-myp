@@ -75,14 +75,13 @@
 \chapter{Introducción}
 El presente documento detalla el proceso de implementación de un protocolo que especifica una forma de comunicación chat. El sistema está compuesto por dos componentes principales: un cliente con interfaz gráfica desarrollado en \textbf{Kotlin} con el framework \textbf{Compose Multiplatform} y un servidor desarrollado en lenguaje \textbf{C} con conexión red usando sockets TCP/IP. 
 
-El objetivo principal del proyecto es implementar un protocolo de comunicación basado en objetos JSON que permita la identificación de usuarios, cambio de estados (Activo, Ausente, Ocupado), envío de mensajes privados y públicos, así como la gestión de salas de chat dinámicas. El desarrollo siguió el modelo de cascada.
-
+El objetivo principal del proyecto es implementar un protocolo de comunicación basado en objetos JSON que permita la identificación de usuarios, cambio de estados (Activo, Ausente, Ocupado), envío de mensajes privados y públicos, así como la gestión de salas de chat dinámicas. 
+El desarrollo siguió el modelo de cascada.
 Las etapas fueron:
 \begin{enumerate}
     \item \textbf{Análisis:} Definición de requisitos funcionales basados en las acciones del usuario.
     \item \textbf{Diseño:} Arquitectura del sistema, diseño de la base de datos en memoria y diagramas UML.
     \item \textbf{Desarrollo:} Codificación del servidor en C y la interfaz en Kotlin.
-    \item \textbf{Pruebas:} Validación de cada comando del protocolo contra el manual de especificaciones.
 \end{enumerate}
 
 \chapter{Análisis}
@@ -96,14 +95,16 @@ A partir del análisis del protocolo, se identificaron los siguientes componente
   \item \textbf{Gestión de Estado (STATUS):} Los usuarios pueden alternar entre \textbf{ACTIVE}, \textbf{AWAY} y \textbf{BUSY}. Cada cambio debe disparar un evento \textbf{NEW\_STATUS} para los demás clientes conectados.
   \item \textbf{Comunicación (TEXT, PUBLIC\_TEXT y ROOM\_TEXT):} 
         \begin{itemize}
-          \item Mensajes privados que solo el destinatario recibe.
+          \item Mensajes privados que solo el destinatario recibe. Si el destinatario no existe, entonces debe regresar un error.
           \item Mensajes públicos dirigidos a todos los usuarios en la conexión global.
-          \item Mensajes dirigidos a todos los usuarios en una sala.
+          \item Mensajes dirigidos a todos los usuarios en una sala. Si la sala no existe o el usuario no pertenece a ella se regresa un error.
         \end{itemize}
-  \item \textbf{Gestión de Salas (ROOMS):} El sistema debe permitir crear salas (con máximo 16 caracteres), invitar usuarios y gestionar pertenencia a sala. Se requiere validación de que el usuario esté invitado antes de unirse.
-  \item \textbf{Obtención de usuarios (USERS y ROOM\_USERS):} El usuario puede obtener la lista de usuarios que están conectados globalmente o en una sala a la que pertenece.
+  \item \textbf{Gestión de Salas (ROOMS):} El sistema debe permitir crear salas (con máximo 16 caracteres), invitar usuarios y gestionar pertenencia a sala. Se requiere validación de que el usuario esté en la sala antes de realizar operaciones, que esté invitado antes de unirse o que la sala exista antes de realizar otras operaciones.
+  \item \textbf{Obtención de usuarios (USERS y ROOM\_USERS):} El usuario puede obtener la lista de usuarios que están conectados globalmente o en una sala a la que pertenece. Si la sala no existe o no está en ella, se regresa un error.
   \item \textbf{Desconexión (DISCONNECT):} Manejo de limpieza de recursos cuando un cliente pierde conexión o decide salir, notificando su salida a las salas que pertenece y globalmente.
 \end{itemize}
+
+Todo mensaje JSON debe terminar con el carácter de salto de línea. Cuando todos los usuarios de una sala la abandonen, la sala será eliminada. Un usuario siempre se conecta con el estado ACTIVE. Un usuario debe identificarse antes de cualquier operación. Un mensaje JSON mal formado regresa un error.
 
 \begin{figure}[H]
   \centering
@@ -112,7 +113,7 @@ A partir del análisis del protocolo, se identificaron los siguientes componente
 \end{figure}
 
 \chapter{Diseño}
-El diseño implementa una arquitectura dividida en cliente y servidor con el objetivo de desacoplar las partes del programa y permitir que diferentes clientes puedan conectarse a un mismo servidor. El servidor actúa como un gestionador de múltiples conexiones simultaneas. El cliente se encarga de la representación visual y la administración de la lógica local.
+El diseño implementa una arquitectura dividida en cliente y servidor con el objetivo de desacoplar las partes del programa y permitir que diferentes clientes puedan conectarse a un mismo servidor. El servidor actúa como un gestionador de múltiples conexiones simultáneas. El cliente se encarga de la representación visual y la administración de la lógica local.
 
 A grandes rasgos, antes de definir cualquier proceso, se define lo siguiente:
 \begin{enumerate}
@@ -120,9 +121,9 @@ A grandes rasgos, antes de definir cualquier proceso, se define lo siguiente:
   \item Una lista de salas global.
   \item Algún tipo de estructura que guarde usuarios.
   \item Algún tipo de estructura que guarde salas, una lista de miembros y una lista de usuarios invitados.
-  \item Hilos, refiriendose a una forma de realizar operaciones con concurrencia.
+  \item Hilos, refiriéndose a una forma de realizar operaciones con concurrencia.
 \end{enumerate}
-Se definen vagamente debido a que, por ahora, solo son recursos abstractos que nos ayudarán a definir los algoritmos que necesita el protocolo. En la sección de diseño se definirán concretamente. \\
+Se definen vagamente debido a que, por ahora, solo son recursos abstractos que nos ayudarán a definir los algoritmos que necesita el protocolo. En la sección de desarrollo se definirán concretamente. \\
 
 Algunos procesos que se detallan en el protocolo son simples, y a continuación se detalla el proceso:
 
@@ -303,5 +304,131 @@ El siguiente diagrama representa la secuencia que siguen el cliente y el servido
 \end{figure}
 
 \chapter{Desarrollo}
+La implementación del servidor se realizó en el lenguaje \textbf{C}. El cliente se realizó en el lenguaje \textbf{Kotlin} utilizando el framework \textbf{Compose Multiplatform}. 
+
+\section{Servidor}
+Empezando con la parte del servidor, se presentaron múltiples desafíos debido a la simplicidad del lenguaje C. \\
+El lenguaje C tiene que compilar, ensamblar y vincular cada archivo que escribamos. Para poder automatizar este proceso y hacerlo amigable para el usuario, se optó por usar el sistema de construcción \textbf{meson}, con el propósito de poder configurar un directorio de construcción y obtener el ejecutable principal con un solo comando. \\ 
+Luego, dado que el protocolo especifica una comunicación utilizando objetos JSON, este fue el primer desafío, ya que C no tiene una biblioteca estándar para crear objetos JSON. Para solucionar este problema, se optó por utilizar la biblioteca \textbf{cJSON}, que provee diversas funciones que facilitan la creación de objetos JSON, incluyendo las más básicas que requiere nuestro protocolo, como asociar una llave con un valor, que nos permite interpretar y crear la mayor parte de las peticiones y respuestas del protocolo; asociar una llave con otro objeto JSON, que nos ayuda al momento de mandar las listas de usuario; y determinar si un valor asociado a una llave es un arreglo, que nos permite lidiar con las invitaciones de forma sencilla. \\
+Otro desafío que surgió derivado de la elección del lenguaje fue el manejo de cadenas de texto. C no tiene algún primitivo u objeto String, en realidad son arreglos de caracteres con un símbolo nulo al final. Esto causo mucho problemas, pues la costumbre ha sido manejar cadenas como en un lenguaje orientado a objetos. Se obtuvieron varios errores del tipo "Segmentation Fault" al erroneamente asumir que la declaración de String era equivalente a \texttt{char* string} y después hacer declaraciones del tipo \texttt{string = string2} dentro de las funciones, omitiendo que estas variables viven dentro de la pila de ejecución y ese apuntador apuntará a otros datos después del término de la función. \\
+Otro error relacionado al manejo de cadenas fue el de utilizar directamente la función \texttt{cJSON\_Print(json)}, pues se asumió que la función solo imprimiría la cadena correspondiente al objeto json sin hacer algo más, pero al correr el programa \texttt{valgrind} y al leer la documentación cuidadosamente se determinó que la función reservaba memoria en el heap, regresaba un apuntador a esa dirección y la debíamos liberar después. \\
+El siguiente (y principal) desafío fue lidiar con la programación concurrente. \\
+El servidor debe atender múltiples conexiones simultáneas. Para esto, se implementó la creación de hilos de ejecución para cada usuario utilizando la biblioteca \texttt{pthread.h}. Derivado de esto, necesitamos manejar el acceso simultaneo a los datos importantes, para lo cual utilizamos una estructura \texttt{pthread\_mutex\_t} para bloquear el acceso simultaneo. \\
+La creación de un socket en el servidor, en pocas palabras, consiste de crear un file descriptor TCP sobre IPv4 (o IPv6, pero esta implementación utiliza solamente IPv4), crear una dirección del servidor que incluya el puerto, realizar la operación bind, realizar la operación listen, empezar a aceptar conexiones y crear un hilo para cada una. 
+
+
+Las principales estructuras en las cuales se basan los algoritmos del servidor son las siguientes: 
+
+%@startuml
+%title Estructuras del Servidor (C)
+%
+%class User {
+    %+ uint8_t status
+    %+ int clientFD
+%}
+%class UserEntry {
+    %+ char username[9]
+    %+ User* user
+%}
+%class UserList {
+    %+ struct hashmap* userList
+    %+ pthread_mutex_t mutexLock
+%}
+%class RoomEntry {
+    %+ char roomname[17]
+    %+ UserList* roomUsers
+    %+ UserList* invitedUsers
+%}
+%class RoomsList {
+    %+ struct hashmap* roomsList
+    %+ pthread_mutex_t mutexLock
+%}
+%
+%UserEntry o-- User
+%UserList o-- UserEntry
+%RoomEntry o-- UserList
+%RoomEntry o-- UserList
+%RoomsList o-- RoomEntry
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=5cm]{Structs.png}
+\end{figure}
+
+Notemos que el diagrama de clases no tiene ningún método. Esto es porque C no es un lenguaje orientado a objetos, el cual conformó otro desafío que se solucionó escribiendo funciones que tomen esas estructuras y las modifiquen tomando en cuenta ciertas condiciones. \\
+Las estructuras de listas utilizan una implementación de la estructura de datos \texttt{hashmap} que se configura para comportarse como un conjunto. Se eligió esta estructura de datos por su complejidad en tiempo $O(1)$ amortizada para obtener elementos, la cual es superior a la complejidad $O(n)$ de una lista, aunque en ciertos casos (como al iterar sobre el diccionario para mandar un mensaje a todos los usuarios) sigue siendo $O(n)$. \\
+Debido a este uso de \texttt{hashmap} fue necesario separar los usuarios \textbf{User} de \textbf{UserEntry}, ya que la implementación de \texttt{hashmap} almacena apuntadores a los elementos que se almacenan, y necesitamos que un usuario tenga datos variables, principalmente el estado. Almacenando un apuntador a \textbf{UserEntry} y tomando como llave a \textbf{username}, obtenemos lo que necesitamos porque podemos simplemente dereferenciar el apuntador \textbf{User*} y cambiar su estado, sin tener que reemplazar el valor dentro de nuestro diccionario hashmap. \\
+Un efecto secundario de los apuntadores \textbf{User*} fue reservar y manejar la memoria de cada usuario. Esto fue resuelto usando una de las funciones de la implementación de hashmap, que permite ejecutar una función de liberación de memoria cada que se elimine un elemento.
+Las salas fueron implementadas como una estructura con un nombre, una lista de usuarios miembros y otra lista de usuarios invitados con el fin de reutilizar las funciones que actúan sobre una \textbf{UserList}. Al crear las listas de usuarios para cada sala, surgió el mismo efecto secundario que se mencionó al hablar de los apuntadores \textbf{User*}, pero se solucionó de la misma forma.\\
+Cabe resaltar que User* solo es liberado cuando se desconecta el usuario; lo anterior mencionado de la lista de salas solo libera la memoria de las listas de miembros y de las listas de invitados.
+El servidor usa el Modelo Vista Controlador de la siguiente forma:
+\begin{itemize}
+  \item Modelo: Estructuras UserList, RoomsList, UserEntry, RoomEntry.
+  \item Controlador: Funciones que leen del socket, decodifican el JSON y manda la respuesta correspondiente (principalmente la función determineJSONResponse() y sus funciones asociadas).
+  \item Vista: El servidor no tiene vista propia, pues de esto se encargará el cliente, pero tiene logs y respuestas JSON que se imprimen en pantalla.
+\end{itemize}
+
+\section{Cliente}
+Avanzando a la parte del cliente, el primer desafío fue la implementación de una interfaz gráfica.  \\
+Dentro de los componentes de \textbf{Compose} se tuvo que realizar la decisión de utilizar \textbf{Material Design 2}, pues la versión más actual, \textbf{Material Design 3}, mandaba advertencias de componentes experimentales al momento de compilar, y esto puede causar problemas posteriormente. \\
+Después de elegir la versión del framework, se requirió aprender que cada función \texttt{@Composable} en Kotlin se corre múltiples veces y no solamente una vez, lo cual causaba múltiples problemas si se asumía que lo contrario. Además, las variables que utiliza Compose se declaran de una forma distinta, principalmente utilizando la característica \textit{delegate} (que transfiere cierto funcionamiento a otra clase) con la palabra \textbf{by} y el lambda \textbf{remember \{ mutableStateOf() \}} que provee Kotlin compose. \\
+El principal desafío con la programación de esta interfaz gráfica fue familiarizarse con mandar instrucciones obtenidas a través de los componentes en la interfaz gráfica a otros lugares del programa en los que no podía interactuar ese componente. Esto fue solucionado a través del uso de argumentos lambda. Para que esto funcionara, se implementó una sección principal del programa que administra las pantallas principales y los datos que se comparten entre ellas, definiendo el lambda correspondiente y pasándolo a la función que dibuja en pantalla las distintas pantallas del programa. \\
+Para comunicarse con el servidor, debemos construir un objeto JSON y mandarlo al servidor por medio de un cliente que implemente un socket TCP. La parte de construcción de un JSON, a diferencia de C, es trivial si utilizamos la biblioteca \textbf{kotlinx.serialization}, con la cual podemos convertir una clase de datos (característica del lenguaje) a un JSON con una sola línea de código. La implementación de la clase de datos fue una clase \textbf{Message}. En lenguajes como \textbf{Java}, los atributos de la clase tendrían que ser definidos en la clase junto con los métodos constructores, \textit{getters} y \textit{setters}, pero el principal método constructor estaría muy cargado de información para la cantidad de atributos posibles que puede tener nuestro mensaje, así que se implementaría un patrón de diseño \textit{builder}. Sin embargo, en Kotlin no es necesario este último patrón de diseño, pues solo hacemos necesario el atributo "type" y hacemos que los demás sean opcionales con valor \texttt{null} por defecto (los cuales se ignorarán al momento de crear un JSON), ya que en Kotlin una clase puede ser instanciada con argumentos nombrados con el nombre del parámetro al que le queremos asignar ese valor. Utilizando la clase de datos Message fue bastante sencillo implementar la lectura de respuestas del servidor haciendo una función que utilice el control de flujo \texttt{when} que tiene Kotlin. \\
+El cliente que maneja sockets TCP fue implementado usando corrutinas de Kotlin, ya que nos permiten mantener un ciclo para recibir respuestas del servidor sin interrumpir la ejecución del cliente, dado que la lectura bloqueante ocurre en \texttt{Dispatchers.IO}, y crucialmente no interrumpir el dibujo de la interfaz gráfica. Además, una de las principales razones para usar corrutinas en vez de hilos es que son una alternativa más ligera.
+
+%@startuml
+%
+%actor Servidor as server
+%
+%package "Vista (Compose)" {
+  %component "ConnectionWindow" as connectionWindow
+  %component "ChatScreen" as chat
+  %component "NewRoomDialog" as newRoomDialog
+%}
+%
+%package "ModeloVista (ViewModel)" {
+  %component "screenManager" as screenManager
+%}
+%
+%package "Modelo" {
+  %component "SocketClient" as socketClient
+  %component "Message" as message
+  %component "determineActionFromJSON()" as determineAction
+  %component "RoomCreationStatus" as roomStatus
+  %component "Invitation" as invitation
+%}
+%
+%connectionWindow --> screenManager
+%screenManager --> socketClient
+%socketClient --> server
+%server --> socketClient
+%socketClient --> screenManager
+%
+%server --> socketClient
+%socketClient --> screenManager
+%screenManager --> message
+%screenManager --> determineAction
+%determineAction --> roomStatus
+%determineAction --> invitation
+%
+%screenManager --> chat
+%chat --> screenManager
+%chat --> newRoomDialog
+%screenManager --> socketClient
+%
+%@enduml
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=15cm]{MVVM.png}
+  \caption{Diagrama de la arquitectura general del programa.}
+\end{figure}
+
+\chapter{Conclusiones}
+Realizar este proyecto requiere conocimiento de múltiples ámbitos. Las principales cosas que se aprendieron fueron conceptos básicos de programación concurrente (Hilos y corrutinas), conceptos básicos de redes (Primeras capas del modelo OSI, sockets, protocolo TCP vs UDP, "\textit{Three-way handshake}" en TCP, file descriptors en sistemas operativos unix, operación bind y listen, etc) y conceptos básicos de interfaces gráficas (Dibujar en pantalla, trabajar a fondo con lambdas, elementos del framework Compose, etc). \\
+Personalmente, dejando aparte la discusión técnica, el proyecto fue dificil de realizar. Conocía los conceptos en un nivel superficial y nunca había trabajado con ellos. Aparte de los retos presentados en la fase de desarrollo, el principal reto fue al aprendizaje, pues tuve que aprender dos nuevos lenguajes (Kotlin y C), los conceptos básicos de Compose, programación concurrente y programación de sockets. \\
+El proyecto puede ser mejorado en muchos aspectos, principalmente garantizando que el servidor nunca puede caerse con peticiones maliciosas de usuarios y manejando todos los \textit{memory leaks} que se pudieran presentar en la ejecución de todo el servidor. Además, el cliente utiliza funciones muy básicas del framework compose y no realiza las mejores prácticas de las interfaces gráficas (solamente consiste en botones, campos de texto y columnas de texto). \\
+Otra mejora que ayudará en posteriores desarrollos es la implementación de pruebas unitarias no triviales. En este proyecto determiné que las pruebas unitarias tienen el potencial de tener una gran utilidad al hacer cambios y refactorizar código. Dentro de las primeras fases de desarrollo del servidor, implementé un hilo de ejecución para leer comandos del teclado y funciones para probar las listas de usuarios y para añadir usuarios inexistentes, pero esto puede ser considerado una mala pŕactica que sería mejor implementada en pruebas unitarias. La mayor parte de las pruebas se realizaron manualmente con una conexión a través de \texttt{netcat}, siguiendo manualmente lo que el protocolo especifica, lo cual tiene el potencial de ser automatizado y olvidarlo hasta que surja un error al cambiar lógica interior del programa.
 
 \end{document}
