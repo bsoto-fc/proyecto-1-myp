@@ -52,7 +52,7 @@ void sendMessage(char* buffer, int socketFD){
   strcpy(bufferWithNewLine, buffer);
   bufferWithNewLine[bufferSize] = '\n';
   bufferWithNewLine[bufferSize + 1] = '\0';
-  send(socketFD, bufferWithNewLine, strlen(bufferWithNewLine), 0);
+  send(socketFD, bufferWithNewLine, strlen(bufferWithNewLine), MSG_NOSIGNAL);
   printf("[SERVER]: Se envió %s",bufferWithNewLine);
   free(bufferWithNewLine);
 }
