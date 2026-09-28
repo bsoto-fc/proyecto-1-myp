@@ -1,4 +1,4 @@
-\documentclass[12pt,a4paper]{report}
+\documentclass[12pt,a4paper]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[spanish]{babel}
@@ -68,26 +68,16 @@
 
 \newpage
 
-\tableofcontents
-
-\newpage
-
-\chapter{Introducción}
+\section{Introducción}
 El presente documento detalla el proceso de implementación de un protocolo que especifica una forma de comunicación chat. El sistema está compuesto por dos componentes principales: un cliente con interfaz gráfica desarrollado en \textbf{Kotlin} con el framework \textbf{Compose Multiplatform} y un servidor desarrollado en lenguaje \textbf{C} con conexión red usando sockets TCP/IP. 
 
 El objetivo principal del proyecto es implementar un protocolo de comunicación basado en objetos JSON que permita la identificación de usuarios, cambio de estados (Activo, Ausente, Ocupado), envío de mensajes privados y públicos, así como la gestión de salas de chat dinámicas. 
 El desarrollo siguió el modelo de cascada.
-Las etapas fueron:
-\begin{enumerate}
-    \item \textbf{Análisis:} Definición de requisitos funcionales basados en las acciones del usuario.
-    \item \textbf{Diseño:} Arquitectura del sistema, diseño de la base de datos en memoria y diagramas UML.
-    \item \textbf{Desarrollo:} Codificación del servidor en C y la interfaz en Kotlin.
-\end{enumerate}
 
-\chapter{Análisis}
+\section{Análisis}
 En esta fase se definieron las capacidades que la implementación del sistema debe ofrecer según el protocolo.
 
-\section{Requisitos}
+\subsection{Requisitos}
 A partir del análisis del protocolo, se identificaron los siguientes componentes:
 
 \begin{itemize}
@@ -112,7 +102,7 @@ Todo mensaje JSON debe terminar con el carácter de salto de línea. Cuando todo
   \caption{Diagrama del análisis (Use Case).}
 \end{figure}
 
-\chapter{Diseño}
+\section{Diseño}
 El diseño implementa una arquitectura dividida en cliente y servidor con el objetivo de desacoplar las partes del programa y permitir que diferentes clientes puedan conectarse a un mismo servidor. El servidor actúa como un gestionador de múltiples conexiones simultáneas. El cliente se encarga de la representación visual y la administración de la lógica local.
 
 A grandes rasgos, antes de definir cualquier proceso, se define lo siguiente:
@@ -137,10 +127,10 @@ Algunos procesos que se detallan en el protocolo son simples, y a continuación 
 
 Para los procesos complejos, se describirán a continuación utilizando diagramas UML.
 
-\section{Diagramas UML}
+\subsection{Diagramas UML}
 Se detallarán en diagramas UML la lógica usada para implementar el protocolo.
 
-\subsection{Diagrama de secuencia (Proceso de autenticación)}
+\subsubsection{Diagrama de secuencia (Proceso de autenticación)}
 El siguiente diagrama representa la secuencia que sigue el cliente y el servidor cuando un usuario busca autenticarse. 
 
 % Código de plantUML
@@ -172,7 +162,7 @@ El siguiente diagrama representa la secuencia que sigue el cliente y el servidor
   \caption{Diagrama de la autenticación.}
 \end{figure}
 
-\subsection{Diagrama de secuencia (Crear sala)}
+\subsubsection{Diagrama de secuencia (Crear sala)}
 
 El siguiente diagrama representa la secuencia que sigue el cliente y el servidor cuando un usuario crea una nueva sala. 
 
@@ -205,7 +195,7 @@ El siguiente diagrama representa la secuencia que sigue el cliente y el servidor
   \caption{Diagrama de secuencia sobre la creación de una nueva habitación.}
 \end{figure}
 
-\subsection{Diagrama de secuencia (Invitar y unirse a sala)}
+\subsubsection{Diagrama de secuencia (Invitar y unirse a sala)}
 
 El siguiente diagrama representa la secuencia que siguen dos clientes y el servidor en el proceso de invitar y unirse a una sala. 
 
@@ -251,7 +241,7 @@ El siguiente diagrama representa la secuencia que siguen dos clientes y el servi
   \caption{Diagrama de secuencia sobre el proceso de invitar y unirse a una sala.}
 \end{figure}
 
-\subsection{Diagrama de secuencia (Texto a sala)}
+\subsubsection{Diagrama de secuencia (Texto a sala)}
 
 El siguiente diagrama representa la secuencia que siguen el cliente y el servidor al mandar un mensaje a una sala. 
 
@@ -279,7 +269,7 @@ El siguiente diagrama representa la secuencia que siguen el cliente y el servido
   \caption{Diagrama de secuencia sobre el proceso de enviar un mensaje a una sala.}
 \end{figure}
 
-\subsection{Diagrama de secuencia (Desconexión)}
+\subsubsection{Diagrama de secuencia (Desconexión)}
 El siguiente diagrama representa la secuencia que siguen el cliente y el servidor al momento de desconectar al cliente.
 
 %@startuml
@@ -303,10 +293,10 @@ El siguiente diagrama representa la secuencia que siguen el cliente y el servido
   \caption{Diagrama de secuencia sobre el proceso de desconexión.}
 \end{figure}
 
-\chapter{Desarrollo}
+\section{Desarrollo}
 La implementación del servidor se realizó en el lenguaje \textbf{C}. El cliente se realizó en el lenguaje \textbf{Kotlin} utilizando el framework \textbf{Compose Multiplatform}. 
 
-\section{Servidor}
+\subsection{Servidor}
 Empezando con la parte del servidor, se presentaron múltiples desafíos debido a la simplicidad del lenguaje C. \\
 El lenguaje C tiene que compilar, ensamblar y vincular cada archivo que escribamos. Para poder automatizar este proceso y hacerlo amigable para el usuario, se optó por usar el sistema de construcción \textbf{meson}, con el propósito de poder configurar un directorio de construcción y obtener el ejecutable principal con un solo comando. \\ 
 Luego, dado que el protocolo especifica una comunicación utilizando objetos JSON, este fue el primer desafío, ya que C no tiene una biblioteca estándar para crear objetos JSON. Para solucionar este problema, se optó por utilizar la biblioteca \textbf{cJSON}, que provee diversas funciones que facilitan la creación de objetos JSON, incluyendo las más básicas que requiere nuestro protocolo, como asociar una llave con un valor, que nos permite interpretar y crear la mayor parte de las peticiones y respuestas del protocolo; asociar una llave con otro objeto JSON, que nos ayuda al momento de mandar las listas de usuario; y determinar si un valor asociado a una llave es un arreglo, que nos permite lidiar con las invitaciones de forma sencilla. \\
@@ -353,7 +343,7 @@ Las principales estructuras en las cuales se basan los algoritmos del servidor s
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=5cm]{Structs.png}
+  \includegraphics[height=7cm]{Structs.png}
 \end{figure}
 
 Notemos que el diagrama de clases no tiene ningún método. Esto es porque C no es un lenguaje orientado a objetos, el cual conformó otro desafío que se solucionó escribiendo funciones que tomen esas estructuras y las modifiquen tomando en cuenta ciertas condiciones. \\
@@ -369,7 +359,7 @@ El servidor usa el Modelo Vista Controlador de la siguiente forma:
   \item Vista: El servidor no tiene vista propia, pues de esto se encargará el cliente, pero tiene logs y respuestas JSON que se imprimen en pantalla.
 \end{itemize}
 
-\section{Cliente}
+\subsection{Cliente}
 Avanzando a la parte del cliente, el primer desafío fue la implementación de una interfaz gráfica.  \\
 Dentro de los componentes de \textbf{Compose} se tuvo que realizar la decisión de utilizar \textbf{Material Design 2}, pues la versión más actual, \textbf{Material Design 3}, mandaba advertencias de componentes experimentales al momento de compilar, y esto puede causar problemas posteriormente. \\
 Después de elegir la versión del framework, se requirió aprender que cada función \texttt{@Composable} en Kotlin se corre múltiples veces y no solamente una vez, lo cual causaba múltiples problemas si se asumía que lo contrario. Además, las variables que utiliza Compose se declaran de una forma distinta, principalmente utilizando la característica \textit{delegate} (que transfiere cierto funcionamiento a otra clase) con la palabra \textbf{by} y el lambda \textbf{remember \{ mutableStateOf() \}} que provee Kotlin compose. \\
@@ -425,8 +415,8 @@ El cliente que maneja sockets TCP fue implementado usando corrutinas de Kotlin, 
   \caption{Diagrama de la arquitectura general del programa.}
 \end{figure}
 
-\chapter{Conclusiones}
-Realizar este proyecto requiere conocimiento de múltiples ámbitos. Las principales cosas que se aprendieron fueron conceptos básicos de programación concurrente (Hilos y corrutinas), conceptos básicos de redes (Primeras capas del modelo OSI, sockets, protocolo TCP vs UDP, "\textit{Three-way handshake}" en TCP, file descriptors en sistemas operativos unix, operación bind y listen, etc) y conceptos básicos de interfaces gráficas (Dibujar en pantalla, trabajar a fondo con lambdas, elementos del framework Compose, etc). \\
+\section{Conclusiones}
+Realizar este proyecto requiere conocimiento de múltiples ámbitos. Las principales cosas que se aprendieron fueron conceptos básicos de programación concurrente (Hilos y corrutinas), conceptos básicos de redes (Primeras capas del modelo OSI, sockets, protocolo TCP vs UDP, \textit{Three-way handshake} en TCP, file descriptors en sistemas operativos unix, operación bind y listen, etc) y conceptos básicos de interfaces gráficas (Dibujar en pantalla, trabajar a fondo con lambdas, elementos del framework Compose, etc). \\
 Personalmente, dejando aparte la discusión técnica, el proyecto fue dificil de realizar. Conocía los conceptos en un nivel superficial y nunca había trabajado con ellos. Aparte de los retos presentados en la fase de desarrollo, el principal reto fue al aprendizaje, pues tuve que aprender dos nuevos lenguajes (Kotlin y C), los conceptos básicos de Compose, programación concurrente y programación de sockets. \\
 El proyecto puede ser mejorado en muchos aspectos, principalmente garantizando que el servidor nunca puede caerse con peticiones maliciosas de usuarios y manejando todos los \textit{memory leaks} que se pudieran presentar en la ejecución de todo el servidor. Además, el cliente utiliza funciones muy básicas del framework compose y no realiza las mejores prácticas de las interfaces gráficas (solamente consiste en botones, campos de texto y columnas de texto). \\
 Otra mejora que ayudará en posteriores desarrollos es la implementación de pruebas unitarias no triviales. En este proyecto determiné que las pruebas unitarias tienen el potencial de tener una gran utilidad al hacer cambios y refactorizar código. Dentro de las primeras fases de desarrollo del servidor, implementé un hilo de ejecución para leer comandos del teclado y funciones para probar las listas de usuarios y para añadir usuarios inexistentes, pero esto puede ser considerado una mala pŕactica que sería mejor implementada en pruebas unitarias. La mayor parte de las pruebas se realizaron manualmente con una conexión a través de \texttt{netcat}, siguiendo manualmente lo que el protocolo especifica, lo cual tiene el potencial de ser automatizado y olvidarlo hasta que surja un error al cambiar lógica interior del programa.
